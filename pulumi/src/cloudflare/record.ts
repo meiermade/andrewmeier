@@ -1,7 +1,7 @@
 import * as cloudflare from '@pulumi/cloudflare'
 import { tunnelHostname } from './tunnel'
 import { provider } from './provider'
-import { andymeierZone, andrewmeierZone, meiermadeZone } from './zone'
+import { andymeierZone, andrewmeierZone } from './zone'
 import * as config from '../config'
 
 export const andymeier = new cloudflare.DnsRecord(config.identifier, {
@@ -28,24 +28,6 @@ new cloudflare.DnsRecord(`${config.identifier}-andrewmeier-root`, {
 new cloudflare.DnsRecord(`${config.identifier}-andrewmeier-www`, {
     name: 'www',
     zoneId: andrewmeierZone.id,
-    type: 'A',
-    content: '192.0.2.1',
-    proxied: true,
-    ttl: 1
-}, { provider })
-
-new cloudflare.DnsRecord(`${config.identifier}-meiermade-root`, {
-    name: '@',
-    zoneId: meiermadeZone.id,
-    type: 'A',
-    content: '192.0.2.1',
-    proxied: true,
-    ttl: 1
-}, { provider })
-
-new cloudflare.DnsRecord(`${config.identifier}-meiermade-www`, {
-    name: 'www',
-    zoneId: meiermadeZone.id,
     type: 'A',
     content: '192.0.2.1',
     proxied: true,
