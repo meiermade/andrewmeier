@@ -4,7 +4,13 @@ WORKDIR /app
 
 # install tailwindcss v4 CLI (match builder platform)
 RUN ARCH=$(uname -m | sed 's/aarch64/arm64/' | sed 's/x86_64/x64/') \
-    && curl -fsSLo /usr/local/bin/tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.1/tailwindcss-linux-${ARCH}" \
+    && case "$ARCH" in \
+        arm64) SHA256=ad627e77b496cccada4a6e26eafff698ef0829081e575a4baf3af8524bb00747 ;; \
+        x64) SHA256=4ab84f2b496c402d3ec4fd25e0e5559fe1184d886dadae8fb4438344ec044c22 ;; \
+        *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSLo /usr/local/bin/tailwindcss "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.2/tailwindcss-linux-${ARCH}" \
+    && echo "$SHA256  /usr/local/bin/tailwindcss" | sha256sum --check \
     && chmod +x /usr/local/bin/tailwindcss
 
 # restore tools

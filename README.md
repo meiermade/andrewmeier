@@ -10,7 +10,7 @@ Personal website for Andy Meier built with F#, Giraffe, Datastar, and Tailwind C
   - `src/App/` - Main application (Giraffe + Datastar)
   - `src/Build/` - FAKE build script
   - `src/Tests/` - Expecto tests
-- `pulumi/` - Infrastructure as code (AWS ECR, Cloudflare, Kubernetes)
+- `pulumi/` - Infrastructure as code (GCP Artifact Registry, Cloudflare, Kubernetes)
 
 ## Development
 

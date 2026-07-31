@@ -9,6 +9,9 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
       - name: Setup .NET
@@ -40,6 +43,7 @@ jobs:
           curl --fail --location --silent --show-error \
             https://github.com/tailwindlabs/tailwindcss/releases/download/v4.2.2/tailwindcss-linux-x64 \
             --output /tmp/tailwindcss
+          echo '4ab84f2b496c402d3ec4fd25e0e5559fe1184d886dadae8fb4438344ec044c22  /tmp/tailwindcss' | sha256sum --check
           sudo install /tmp/tailwindcss /usr/local/bin/tailwindcss
       - name: Run local E2E
         working-directory: ./e2e
@@ -56,8 +60,10 @@ jobs:
           if-no-files-found: ignore
   preview:
     name: Preview
+    if: github.event.pull_request.head.repo.full_name == github.repository
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -74,7 +80,7 @@ jobs:
           install_components: gke-gcloud-auth-plugin
       - name: Install Packages
         working-directory: ./pulumi
-        run: npm install
+        run: npm ci
       - name: TypeScript Check
         working-directory: ./pulumi
         run: npm run check

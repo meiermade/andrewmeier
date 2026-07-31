@@ -14,10 +14,10 @@ jobs:
   update:
     name: Update
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v7
       - name: Setup Node
@@ -30,7 +30,7 @@ jobs:
           install_components: gke-gcloud-auth-plugin
       - name: Install Packages
         working-directory: ./pulumi
-        run: npm install
+        run: npm ci
       - name: TypeScript Check
         working-directory: ./pulumi
         run: npm run check
@@ -61,6 +61,7 @@ jobs:
     name: E2E
     needs: update
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     steps:

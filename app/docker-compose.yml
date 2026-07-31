@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: src/MockNotion/Dockerfile
     ports:
-      - "5015:5015"
+      - "127.0.0.1:5015:5015"
     environment:
       MOCK_NOTION_URL: http://0.0.0.0:5015
 
@@ -13,4 +13,4 @@ services:
     environment:
       ACCEPT_EULA: Y
     ports:
-      - "5341:80"
+      - "127.0.0.1:5341:80"
