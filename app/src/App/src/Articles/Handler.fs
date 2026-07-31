@@ -4,6 +4,7 @@ open App.Infrastructure
 open App.ServiceRegistry
 open App.Articles.View
 open App.Common.Handler
+open App.Common.View
 open Giraffe
 open Microsoft.AspNetCore.Http
 open StarFederation.Datastar.DependencyInjection
@@ -76,7 +77,7 @@ let private getArticlePage (services:Services) (id:string) : HttpHandler =
         match! services.article.tryGetArticle id with
         | Some article ->
             let page = articlePage article
-            let url = $"/articles/{article.permalink}"
+            let url = SiteUrl.article article.permalink
 
             if ctx.IsDatastar then
                 let ds = ctx.GetService<IDatastarService>()

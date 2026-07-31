@@ -3,6 +3,7 @@ open App.ServiceRegistry
 open Domain
 open Giraffe
 open Microsoft.AspNetCore.Builder
+open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open OpenTelemetry
 open OpenTelemetry.Exporter
@@ -55,8 +56,18 @@ let configureServices (serviceCollection: IServiceCollection) (tracerProvider: T
         .AddGiraffe()
     |> ignore
 
+let private addSecurityHeaders (ctx:HttpContext) =
+    ctx.Response.Headers["Content-Security-Policy"] <- "base-uri 'self'; frame-ancestors 'none'; object-src 'none'"
+    ctx.Response.Headers["Permissions-Policy"] <- "camera=(), geolocation=(), microphone=()"
+    ctx.Response.Headers["Referrer-Policy"] <- "strict-origin-when-cross-origin"
+    ctx.Response.Headers["Strict-Transport-Security"] <- "max-age=31536000; includeSubDomains"
+    ctx.Response.Headers["X-Content-Type-Options"] <- "nosniff"
+
 let configureApp (services: Services) (app: WebApplication) =
     app
+        .Use(fun (ctx:HttpContext) (next:RequestDelegate) ->
+            addSecurityHeaders ctx
+            next.Invoke ctx)
         .UseSerilogRequestLogging(fun opts ->
             opts.GetLevel <- fun ctx _ _ ->
                 if ctx.Request.Path.Value = "/health" then LogEventLevel.Verbose

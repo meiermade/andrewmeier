@@ -98,6 +98,61 @@ let tests =
                 Expect.isFalse (html.Contains "data-select-root") "Expected no custom select state machine"
             }
 
+            test "does not let article permalinks escape attributes or Datastar expressions" {
+                let unsafePermalink = "\" onmouseover=\"alert(1)"
+                let article : Domain.Article.Article =
+                    { id = "article"
+                      permalink = unsafePermalink
+                      title = "Example article"
+                      summary = "Summary"
+                      icon = ""
+                      iconDescription = ""
+                      cover = ""
+                      coverDescription = ""
+                      tags = [||]
+                      createdAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero)
+                      updatedAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero)
+                      blocks = []
+                      syncedAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero) }
+
+                let html = ArticleCard.summary article |> Render.toHtmlDocString
+
+                Expect.isFalse (html.Contains "onmouseover=") "Expected permalink not to create an HTML event attribute"
+                Expect.stringContains html "/articles/%22%20onmouseover%3D%22alert%281%29" "Expected permalink to be encoded as one URL segment"
+            }
+
+            test "allows safe Notion links without rendering unsafe URL schemes or attributes" {
+                let richText href : Domain.Notion.RichText =
+                    { plainText = "Example"
+                      href = Some href
+                      annotations =
+                        { bold = false
+                          italic = false
+                          strikethrough = false
+                          underline = false
+                          code = false
+                          color = "default" } }
+
+                let safeHtml = App.Articles.View.RichTextView.toHtml (richText "https://example.com/?a=1&b=2") |> Render.toHtmlDocString
+                let unsafeHtml = App.Articles.View.RichTextView.toHtml (richText "javascript:alert(1)\" onclick=\"alert(2)") |> Render.toHtmlDocString
+
+                Expect.stringContains safeHtml "href=\"https://example.com/?a=1&amp;b=2\"" "Expected a safe, encoded HTTPS link"
+                Expect.isFalse (unsafeHtml.Contains "<a") "Expected unsafe URL schemes to render as plain text"
+                Expect.isFalse (unsafeHtml.Contains "onclick=") "Expected Notion content not to create an event attribute"
+            }
+
+            test "restricts image and background URLs to encoded HTTP resources" {
+                let safeImage = SafeOutput.tryImageAttribute "https://example.com/image.png?a=1&b=2"
+                let unsafeImage = SafeOutput.tryImageAttribute "javascript:alert(1)"
+                let background = SafeOutput.tryBackgroundImageStyle "https://example.com/image.png?value=')"
+
+                Expect.equal safeImage (Some "https://example.com/image.png?a=1&amp;b=2") "Expected an encoded HTTPS image URL"
+                Expect.isNone unsafeImage "Expected an unsafe image URL scheme to be rejected"
+                Expect.isSome background "Expected an HTTPS background image"
+                Expect.isFalse (background.Value.Contains "')") "Expected CSS delimiters to be encoded"
+                Expect.stringContains background.Value "%27%29" "Expected quote and parenthesis CSS characters to be encoded"
+            }
+
             test "identifies articles as personal writing" {
                 let page =
                     App.Articles.View.articlesPage {
@@ -158,6 +213,16 @@ let tests =
                 Expect.isFalse (searchOnly.Contains "type=\"search\"") "Expected no browser-native search clear control"
                 Expect.stringContains searchAndFilter "Clear filters" "Expected filters-only clear action"
                 Expect.stringContains searchAndFilter "href=\"/articles?search=engine\"" "Expected filter clearing to preserve search"
+            }
+        ]
+
+        testList "Navigation" [
+            test "serializes pushed URLs as JavaScript data" {
+                let script = App.Common.Handler.historyScript "');alert(1)//"
+
+                Expect.isFalse (script.Contains "pushState(null, '', '');alert(1)//')") "Expected URL not to break out of the JavaScript string"
+                Expect.stringContains script "\\u0027);alert(1)//" "Expected the quote to be JavaScript encoded"
+                Expect.stringContains script "window.history.pushState" "Expected history update script"
             }
         ]
 

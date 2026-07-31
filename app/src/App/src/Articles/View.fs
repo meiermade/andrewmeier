@@ -77,9 +77,6 @@ module FilterControl =
             }
         }
 
-let private attributeValue (value:string) =
-    System.Net.WebUtility.HtmlEncode value
-
 let articlesPage (state:ArticlesPageState) =
     let filters = state.filters
     let hasSearch = filters.search.IsSome
@@ -121,7 +118,7 @@ let articlesPage (state:ArticlesPageState) =
                     _action "/articles"
                     _class "border-b border-gray-300/60 py-4 dark:border-gray-700/60"
                     match filters.tag with
-                    | Some tag -> input { _type "hidden"; _name "tag"; _value (attributeValue tag) }
+                    | Some tag -> input { _type "hidden"; _name "tag"; _value (SafeOutput.attribute tag) }
                     | None -> ()
                     match filters.publishedYear with
                     | Some year -> input { _type "hidden"; _name "year"; _value (string year) }
@@ -138,7 +135,7 @@ let articlesPage (state:ArticlesPageState) =
                                     _role "searchbox"
                                     _name "search"
                                     _ariaLabel "Search articles"
-                                    _value (filters.search |> Option.defaultValue "" |> attributeValue)
+                                    _value (filters.search |> Option.defaultValue "" |> SafeOutput.attribute)
                                     _placeholder "Search articles"
                                     _class searchInputClass
                                 }
@@ -276,8 +273,8 @@ module RichTextView =
                     t.plainText
                 }
 
-        match t.href with
-        | Some href -> a { _href (toAnchorHref href); inner }
+        match t.href |> Option.map toAnchorHref |> Option.bind SafeOutput.tryLinkAttribute with
+        | Some href -> a { _href href; inner }
         | None -> inner
 
 module Block =
@@ -288,7 +285,7 @@ module Block =
         | _ -> Other
 
     let rec toHtml (block:Domain.Notion.Block) : HtmlElement =
-        let cleanId = block.id.Replace("-", "")
+        let cleanId = block.id.Replace("-", "") |> SafeOutput.attribute
 
         match block.blockType with
         | Domain.Notion.BlockType.Heading1 richText ->
@@ -328,15 +325,18 @@ module Block =
                 | "JSON" -> "json"
                 | "TOML" -> "toml"
                 | other -> other
+            let languageClass = $"language-{language}" |> SafeOutput.attribute
             pre {
-                _class $"language-{language}"
+                _class languageClass
                 code {
-                    _class $"language-{language}"
+                    _class languageClass
                     for t in richText do RichTextView.toHtml t
                 }
             }
         | Domain.Notion.BlockType.Image url ->
-            img { _class "drop-shadow-xl rounded"; _src url }
+            match SafeOutput.tryImageAttribute url with
+            | Some safeUrl -> img { _class "drop-shadow-xl rounded"; _src safeUrl; _alt "" }
+            | None -> empty
         | Domain.Notion.BlockType.Divider ->
             div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
         | Domain.Notion.BlockType.Quote richText ->
@@ -388,7 +388,9 @@ let articlePage (article':Article) =
         div {
             div {
                 _class "bg-cover bg-no-repeat bg-center bg-blend-overlay bg-gray-800"
-                _style $"background-image: url('{article'.cover}')"
+                match SafeOutput.tryBackgroundImageStyle article'.cover with
+                | Some style -> _style style
+                | None -> ()
                 div {
                     _class "pt-28 pb-20 px-4 mx-auto max-w-5xl flex flex-col justify-end items-start text-gray-50"
                     time {

@@ -6,6 +6,7 @@ open Giraffe
 open FSharp.ViewEngine
 open Microsoft.AspNetCore.Http
 open StarFederation.Datastar.DependencyInjection
+open System.Text.Json
 
 let patchElement (ds:IDatastarService) (element:HtmlElement) = task {
     let html = Render.toString element
@@ -16,10 +17,12 @@ let inline patchSignals (ds:IDatastarService) (signals:'T) = task {
     do! ds.PatchSignalsAsync(signals)
 }
 
+let historyScript (url:string) =
+    let serializedUrl = JsonSerializer.Serialize url
+    $"""window.history.pushState(null, '', {serializedUrl});window.trackSnowplowPageView&&window.trackSnowplowPageView();"""
+
 let pushUrl (ds:IDatastarService) (url:string) = task {
-    // language=javascript
-    let js = $"""window.history.pushState(null, '', '{url}');window.trackSnowplowPageView&&window.trackSnowplowPageView();"""
-    do! ds.ExecuteScriptAsync(js)
+    do! ds.ExecuteScriptAsync(historyScript url)
 }
 
 let renderPage (services:Services) (page:HtmlElement) (selectedNav:string) : HttpHandler =

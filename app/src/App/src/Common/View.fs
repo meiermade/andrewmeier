@@ -2,8 +2,10 @@ module App.Common.View
 
 open FSharp.ViewEngine
 open Domain.Article
+open System
 open System.Collections.Generic
 open System.IO
+open System.Net
 open System.Text.Json
 open type Html
 open type Datastar
@@ -29,6 +31,52 @@ module Asset =
 
     let fingerprinted (path:string) =
         resolveWithManifest manifest.Value path
+
+module SafeOutput =
+    let private linkSchemes = Set.ofList [ Uri.UriSchemeHttp; Uri.UriSchemeHttps; Uri.UriSchemeMailto ]
+    let private imageSchemes = Set.ofList [ Uri.UriSchemeHttp; Uri.UriSchemeHttps ]
+
+    let attribute (value:string) =
+        WebUtility.HtmlEncode value
+
+    let private tryAbsoluteUrl (allowedSchemes:Set<string>) (value:string) =
+        match Uri.TryCreate(value, UriKind.Absolute) with
+        | true, uri when allowedSchemes.Contains(uri.Scheme.ToLowerInvariant()) ->
+            uri.GetComponents(UriComponents.AbsoluteUri, UriFormat.UriEscaped) |> Some
+        | _ -> None
+
+    let tryLinkAttribute (value:string) =
+        if value.StartsWith("#", StringComparison.Ordinal) then
+            value |> attribute |> Some
+        elif value.StartsWith("/", StringComparison.Ordinal) && not (value.StartsWith("//", StringComparison.Ordinal)) then
+            value |> attribute |> Some
+        else
+            value
+            |> tryAbsoluteUrl linkSchemes
+            |> Option.map attribute
+
+    let tryImageAttribute (value:string) =
+        value
+        |> tryAbsoluteUrl imageSchemes
+        |> Option.map attribute
+
+    let tryBackgroundImageStyle (value:string) =
+        value
+        |> tryAbsoluteUrl imageSchemes
+        |> Option.map (fun url ->
+            let cssUrl =
+                url
+                    .Replace("\\", "%5C", StringComparison.Ordinal)
+                    .Replace("'", "%27", StringComparison.Ordinal)
+                    .Replace("\"", "%22", StringComparison.Ordinal)
+                    .Replace("(", "%28", StringComparison.Ordinal)
+                    .Replace(")", "%29", StringComparison.Ordinal)
+
+            $"background-image: url('{cssUrl}')" |> attribute)
+
+module SiteUrl =
+    let article (permalink:string) =
+        $"/articles/{Uri.EscapeDataString permalink}"
 
 module MiniIcon =
     let github =
@@ -153,9 +201,8 @@ module ArticleCard =
         }
 
     let summary (article':Article) =
-        let url = $"/articles/{article'.permalink}"
+        let url = SiteUrl.article article'.permalink
         article {
-            _id article'.permalink
             _class "py-6 border-b border-gray-300/60 dark:border-gray-700/60"
             div {
                 _class "flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-gray-400 dark:text-gray-500"

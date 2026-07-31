@@ -10,6 +10,10 @@ test('homepage renders recent articles', async ({ page }) => {
   const response = await page.goto('/', { waitUntil: 'domcontentloaded' })
 
   expect(response?.status()).toBe(200)
+  expect(response?.headers()['strict-transport-security']).toContain('max-age=')
+  expect(response?.headers()['x-content-type-options']).toBe('nosniff')
+  expect(response?.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin')
+  expect(response?.headers()['content-security-policy']).toContain("frame-ancestors 'none'")
   await expect(page.getByRole('heading', { name: 'Andy Meier', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Recent articles', exact: true })).toBeVisible()
 })
