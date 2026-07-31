@@ -14,4 +14,3 @@ const getZone = (name: string) =>
 
 export const andymeierZone = getZone('andymeier.dev')
 export const andrewmeierZone = getZone('andrewmeier.dev')
-export const meiermadeZone = getZone('meiermade.com')
