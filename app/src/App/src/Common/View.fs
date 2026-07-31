@@ -100,6 +100,12 @@ module ArticleCard =
             text
         }
 
+    let tags (tags:string[]) =
+        div {
+            _class "flex flex-wrap gap-2"
+            for tag' in tags do tag tag'
+        }
+
     let summary (article':Article) =
         let url = $"/articles/{article'.permalink}"
         article {
@@ -127,8 +133,8 @@ module ArticleCard =
             }
             p { _class "mt-2 text-base text-gray-600 dark:text-gray-400"; article'.summary }
             div {
-                _class "mt-4 flex flex-wrap gap-2"
-                for t in article'.tags do tag t
+                _class "mt-4"
+                tags article'.tags
             }
         }
 
@@ -146,8 +152,7 @@ module Footer =
             div {
                 _class "text-sm flex flex-col space-y-1"
                 a { _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", "@get('/articles')"); "Articles" }
-                a { _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", "@get('/services')"); "Services" }
-                a { _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", "@get('/projects')"); "Projects" }
+                a { _href "https://meiermade.com"; _class "whitespace-nowrap underline hover:text-emerald-600 dark:hover:text-emerald-400"; "Meier Made" }
             }
         }
 
@@ -182,6 +187,13 @@ module TopNav =
             _dataClass ("dark:text-gray-300", $"$selectedNav != '{id}'")
             _dataOn ("click", $"@get('{href}')")
             text label
+        }
+
+    let private companyLink (className:string) =
+        a {
+            _href "https://meiermade.com"
+            _class className
+            text "Meier Made"
         }
 
     let private themeToggle =
@@ -260,8 +272,7 @@ module TopNav =
                 _anchor "bottom end"
                 _class "mt-2 w-56 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
                 mobileItem("nav-articles", "Articles", "/articles")
-                mobileItem("nav-projects", "Projects", "/projects")
-                mobileItem("nav-services", "Services", "/services")
+                companyLink "block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-emerald-600 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-emerald-400"
             }
         }
 
@@ -278,8 +289,7 @@ module TopNav =
                 div {
                     _class "hidden md:flex items-center gap-4"
                     item("nav-articles", text "Articles", "/articles")
-                    item("nav-projects", text "Projects", "/projects")
-                    item("nav-services", text "Services", "/services")
+                    companyLink "p-2 text-sm font-semibold text-gray-800 hover:text-emerald-600 dark:text-gray-200 dark:hover:text-emerald-400"
                 }
                 themeToggle
                 mobileDropdown
@@ -319,35 +329,36 @@ type Document =
                 }
                 div {
                     _id "cookie-consent-banner"
-                    _class "hidden fixed inset-x-0 bottom-0 z-50 border-t border-gray-300 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-gray-700 dark:bg-gray-900/95"
                     _role "dialog"
+                    _ariaLabelledby "analytics-consent-title"
+                    _ariaDescribedby "analytics-consent-description"
                     _ariaLive "polite"
+                    _class "pointer-events-none fixed inset-x-0 bottom-0 z-50 hidden px-4 pb-4 sm:px-6 sm:pb-6"
                     div {
-                        _class "mx-auto flex max-w-5xl flex-col gap-4 md:flex-row md:items-center md:justify-between"
-                        div {
-                            _class "max-w-3xl"
-                            p {
-                                _class "text-sm font-semibold text-gray-900 dark:text-gray-100"
-                                "Analytics cookies"
-                            }
-                            p {
-                                _class "mt-1 text-sm text-gray-600 dark:text-gray-300"
-                                "I use analytics to measure how this site is used. You can accept or reject analytics cookies, and the site will work either way."
-                            }
+                        _class "pointer-events-auto ml-auto max-w-xl rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl shadow-gray-950/15 sm:p-6 dark:border-gray-700 dark:bg-gray-900 dark:shadow-black/30"
+                        h2 {
+                            _id "analytics-consent-title"
+                            _class "text-base font-semibold text-gray-950 dark:text-gray-50"
+                            "Optional analytics"
+                        }
+                        p {
+                            _id "analytics-consent-description"
+                            _class "mt-2 text-sm/6 text-gray-600 dark:text-gray-300"
+                            "Google Analytics and Snowplow are loaded only if you accept. They help me understand site usage; declining does not affect the site."
                         }
                         div {
-                            _class "flex flex-col gap-2 sm:flex-row"
+                            _class "mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
                             button {
                                 _type "button"
-                                _class "inline-flex items-center justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:cursor-pointer dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+                                _class "rounded-full border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800"
                                 _onclick "setAnalyticsConsent('declined')"
-                                "Reject"
+                                "Decline"
                             }
                             button {
                                 _type "button"
-                                _class "inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 hover:cursor-pointer dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                                _class "rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:hover:bg-emerald-400"
                                 _onclick "setAnalyticsConsent('accepted')"
-                                "Accept"
+                                "Accept analytics"
                             }
                         }
                     }

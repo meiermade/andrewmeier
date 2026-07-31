@@ -3,25 +3,270 @@ module App.Articles.View
 open Domain.Article
 open FSharp.ViewEngine
 open App.Common.View
+open System
 open type Datastar
 open type Html
 
-let articlesPage (articles:Article list) =
-    let content =
+type FilterState =
+    { search: string option
+      tag: string option
+      publishedYear: int option }
+
+module FilterState =
+    let url (filters:FilterState) =
+        [ "search", filters.search
+          "tag", filters.tag
+          "year", filters.publishedYear |> Option.map string ]
+        |> List.choose (fun (key, value) ->
+            value
+            |> Option.map _.Trim()
+            |> Option.filter (String.IsNullOrWhiteSpace >> not)
+            |> Option.map (fun value -> $"{Uri.EscapeDataString key}={Uri.EscapeDataString value}"))
+        |> String.concat "&"
+        |> function
+            | "" -> "/articles"
+            | query -> $"/articles?{query}"
+
+type ArticlesPageState =
+    { articles: Article list
+      filters: FilterState
+      tags: string list
+      years: int list }
+
+module FilterControl =
+    let private json (value:string) =
+        System.Text.Json.JsonSerializer.Serialize value
+        |> fun serialized -> serialized.Replace("\"", "'")
+
+    let select (name:string) (options:(string * string) list) (selected:string) (ariaLabel:string) (onChange:string) (buttonClass:string) =
+        let selectedValue =
+            options
+            |> List.tryFind (fun (value, _) -> value = selected)
+            |> Option.orElse (options |> List.tryHead)
+            |> Option.map fst
+            |> Option.defaultValue ""
+        let selectedLabel =
+            options
+            |> List.tryFind (fun (value, _) -> value = selectedValue)
+            |> Option.map snd
+            |> Option.defaultValue ""
+        let prefix = "article_filter_" + Guid.NewGuid().ToString("N")
+        let valueSignal = prefix + "Value"
+        let labelSignal = prefix + "Label"
+        let openSignal = prefix + "Open"
+        let buttonId = prefix + "Button"
+        let optionsId = prefix + "Options"
+
         div {
-            _class "mx-auto max-w-5xl py-10 px-4"
-            header {
-                h1 { _class "text-4xl text-gray-900 dark:text-gray-100 font-medium"; "Articles" }
-                p { _class "mt-4 text-lg text-gray-600 dark:text-gray-400"; "My thoughts on finance and technology" }
+            _class "relative"
+            _data ("select-root", "")
+            _data ("signals", $"{{ {valueSignal}: {json selectedValue}, {labelSignal}: {json selectedLabel}, {openSignal}: false }}")
+            _data ("on:keydown__window", $"evt.key == 'Escape' && (${openSignal} = false)")
+            input { _type "hidden"; _name name; _value selectedValue }
+            button {
+                _id buttonId
+                _type "button"
+                _role "combobox"
+                _ariaHaspopup "listbox"
+                _ariaLabel ariaLabel
+                _attr ("aria-controls", optionsId)
+                _data ("select-button", "")
+                _data ("attr:aria-expanded", $"${openSignal} ? 'true' : 'false'")
+                _data ("on:click__stop", $"${openSignal} = !${openSignal}")
+                _class buttonClass
+                span { _class "block min-w-0 truncate"; _data ("text", $"${labelSignal}"); selectedLabel }
+                span {
+                    _class "pointer-events-none ml-2 flex size-5 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400"
+                    _ariaHidden "true"
+                    raw """<svg viewBox="0 0 20 20" fill="currentColor" class="size-4"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" /></svg>"""
+                }
             }
             div {
-                _class "mt-10"
-                div {
-                    div {
-                        _class "flex flex-col space-y-4"
-                        for a in articles do ArticleCard.summary a
+                _id optionsId
+                _role "listbox"
+                _attr ("aria-labelledby", buttonId)
+                _data ("select-options", "")
+                _data ("show", $"${openSignal}")
+                _data ("on:click__outside", $"${openSignal} = false")
+                _style "display:none"
+                _class "absolute right-0 top-full z-40 mt-1 min-w-full overflow-hidden rounded-lg border border-gray-300 bg-white py-1 shadow-xl dark:border-gray-600 dark:bg-gray-800"
+                for index, (value, label) in options |> List.indexed do
+                    button {
+                        _id $"{prefix}Option{index}"
+                        _type "button"
+                        _role "option"
+                        _tabindex -1
+                        _data ("select-option", "")
+                        _data ("attr:aria-selected", $"${valueSignal} == {json value} ? 'true' : 'false'")
+                        _data ("on:click", $"${valueSignal} = {json value}; ${labelSignal} = {json label}; el.closest('[data-select-root]').querySelector('input[type=hidden]').value = {json value}; ${openSignal} = false; {onChange}")
+                        _data ("class", $"{{ 'bg-gray-100 font-semibold dark:bg-gray-700': ${valueSignal} == {json value} }}")
+                        _class "flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-gray-800 transition hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-100 dark:hover:bg-gray-700"
+                        span { _class "truncate"; label }
+                        span {
+                            _class "text-emerald-600 dark:text-emerald-400"
+                            _ariaHidden "true"
+                            _data ("show", $"${valueSignal} == {json value}")
+                            "✓"
+                        }
                     }
+            }
+        }
+
+let articlesPage (state:ArticlesPageState) =
+    let filters = state.filters
+    let hasSearch = filters.search.IsSome
+    let hasActiveFilters = filters.tag.IsSome || filters.publishedYear.IsSome
+    let hasCriteria = hasSearch || hasActiveFilters
+    let clearSearchUrl = FilterState.url { filters with search = None }
+    let clearFiltersUrl = FilterState.url { filters with tag = None; publishedYear = None }
+    let searchInputClass =
+        "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-400/20"
+        + if hasSearch then " pr-10" else ""
+
+    let content =
+        div {
+            _class "mx-auto max-w-5xl px-4 py-10"
+            header {
+                h1 { _class "text-4xl font-medium text-gray-900 dark:text-gray-100"; "Articles" }
+                p {
+                    _class "mt-4 max-w-2xl text-lg leading-7 text-gray-600 dark:text-gray-400"
+                    "Personal notes by Andy Meier. Unless otherwise noted, they reflect my own views—not those of clients, collaborators, or organizations I work with."
                 }
+            }
+            section {
+                _ariaLabel "Article search and filters"
+                _class "mt-10"
+                form {
+                    _method "get"
+                    _action "/articles"
+                    _class "border-b border-gray-300/60 py-4 dark:border-gray-700/60"
+                    div {
+                        _class "flex flex-col gap-2 sm:flex-row sm:items-center"
+                        label {
+                            _class "min-w-0 flex-1"
+                            span { _class "sr-only"; "Search articles" }
+                            div {
+                                _class "relative"
+                                input {
+                                    _type "text"
+                                    _role "searchbox"
+                                    _name "search"
+                                    _ariaLabel "Search articles"
+                                    _value (filters.search |> Option.defaultValue "")
+                                    _placeholder "Search articles"
+                                    _class searchInputClass
+                                }
+                                if hasSearch then
+                                    a {
+                                        _href clearSearchUrl
+                                        _ariaLabel "Clear search"
+                                        _class "absolute inset-y-0 right-0 inline-flex items-center px-3 text-gray-400 transition hover:text-gray-900 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-500 dark:hover:text-gray-100 dark:focus-visible:outline-emerald-400"
+                                        span { _class "sr-only"; "Clear search" }
+                                        raw """<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" class="size-4" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m6 6 8 8m0-8-8 8" /></svg>"""
+                                    }
+                            }
+                        }
+                        if filters.tag.IsNone || filters.publishedYear.IsNone then
+                            details {
+                                _class "group relative shrink-0"
+                                summary {
+                                    _class "flex cursor-pointer list-none items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
+                                    "+ Add filter"
+                                }
+                                div {
+                                    _class "z-30 mt-2 grid w-full gap-3 rounded-lg border border-gray-300 bg-white p-3 shadow-xl sm:absolute sm:right-0 sm:w-auto sm:min-w-64 dark:border-gray-700 dark:bg-gray-900"
+                                    if filters.tag.IsNone then
+                                        label {
+                                            _class "grid gap-1 text-sm"
+                                            span { _class "font-medium text-gray-900 dark:text-gray-100"; "Tag" }
+                                            FilterControl.select
+                                                "tag"
+                                                (("", "Select tag") :: (state.tags |> List.map (fun tag -> tag, tag)))
+                                                ""
+                                                "Tag filter"
+                                                "el.closest('form').requestSubmit()"
+                                                "inline-flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:outline-emerald-400"
+                                        }
+                                    if filters.publishedYear.IsNone then
+                                        label {
+                                            _class "grid gap-1 text-sm"
+                                            span { _class "font-medium text-gray-900 dark:text-gray-100"; "Published" }
+                                            FilterControl.select
+                                                "year"
+                                                (("", "Select year") :: (state.years |> List.map (fun year -> string year, string year)))
+                                                ""
+                                                "Published year filter"
+                                                "el.closest('form').requestSubmit()"
+                                                "inline-flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:outline-emerald-400"
+                                        }
+                                }
+                            }
+                        button { _type "submit"; _class "sr-only"; "Search" }
+                    }
+                    if hasActiveFilters then
+                        div {
+                            _class "mt-3 flex flex-wrap items-center gap-2"
+                            match filters.tag with
+                            | Some tag ->
+                                div {
+                                    _class "inline-flex items-center rounded-md border border-gray-300 bg-gray-50 text-sm dark:border-gray-600 dark:bg-gray-800"
+                                    span { _class "border-r border-gray-300 px-2 py-1.5 font-medium text-gray-500 dark:border-gray-600 dark:text-gray-400"; "Tag" }
+                                    FilterControl.select
+                                        "tag"
+                                        (state.tags |> List.map (fun tagOption -> tagOption, tagOption))
+                                        tag
+                                        "Tag filter"
+                                        "el.closest('form').requestSubmit()"
+                                        "inline-flex items-center bg-transparent py-1.5 pl-2 pr-1 font-medium text-gray-900 outline-none focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-100 dark:focus-visible:outline-emerald-400"
+                                    a {
+                                        _href (FilterState.url { filters with tag = None })
+                                        _ariaLabel "Remove tag filter"
+                                        _class "inline-flex self-stretch items-center border-l border-gray-300 px-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                                        "×"
+                                    }
+                                }
+                            | None -> ()
+                            match filters.publishedYear with
+                            | Some year ->
+                                div {
+                                    _class "inline-flex items-center rounded-md border border-gray-300 bg-gray-50 text-sm dark:border-gray-600 dark:bg-gray-800"
+                                    span { _class "border-r border-gray-300 px-2 py-1.5 font-medium text-gray-500 dark:border-gray-600 dark:text-gray-400"; "Published" }
+                                    FilterControl.select
+                                        "year"
+                                        (state.years |> List.map (fun yearOption -> string yearOption, string yearOption))
+                                        (string year)
+                                        "Published year filter"
+                                        "el.closest('form').requestSubmit()"
+                                        "inline-flex items-center bg-transparent py-1.5 pl-2 pr-1 font-medium text-gray-900 outline-none focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-100 dark:focus-visible:outline-emerald-400"
+                                    a {
+                                        _href (FilterState.url { filters with publishedYear = None })
+                                        _ariaLabel "Remove published year filter"
+                                        _class "inline-flex self-stretch items-center border-l border-gray-300 px-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                                        "×"
+                                    }
+                                }
+                            | None -> ()
+                            a {
+                                _href clearFiltersUrl
+                                _class "px-1 py-1.5 text-sm font-medium text-gray-500 transition hover:text-gray-900 hover:underline dark:text-gray-400 dark:hover:text-gray-100"
+                                "Clear filters"
+                            }
+                        }
+                }
+                if state.articles.IsEmpty then
+                    div {
+                        _class "py-12 text-center"
+                        h2 { _class "text-lg font-semibold text-gray-900 dark:text-gray-100"; "No articles found" }
+                        if hasCriteria then
+                            p { _class "mt-2 text-sm text-gray-600 dark:text-gray-400"; "Try changing or clearing your search and filters." }
+                        else
+                            p { _class "mt-2 text-sm text-gray-600 dark:text-gray-400"; "Articles will appear here when they are published." }
+                    }
+                else
+                    div {
+                        _class "flex flex-col"
+                        for article in state.articles do ArticleCard.summary article
+                    }
             }
         }
     Page.primary content
@@ -172,6 +417,10 @@ let articlePage (article':Article) =
                     h1 {
                         _class "mt-4 text-4xl font-bold tracking-tight text-gray-50"
                         article'.title
+                    }
+                    div {
+                        _class "mt-5"
+                        ArticleCard.tags article'.tags
                     }
                 }
             }

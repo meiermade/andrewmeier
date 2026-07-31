@@ -1,4 +1,13 @@
 services:
+  mock-notion:
+    build:
+      context: .
+      dockerfile: src/MockNotion/Dockerfile
+    ports:
+      - "5015:5015"
+    environment:
+      MOCK_NOTION_URL: http://0.0.0.0:5015
+
   seq:
     image: datalust/seq:2024.3
     environment:

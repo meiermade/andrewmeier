@@ -21,6 +21,8 @@ dotnet paket restore
 ./fake.sh Watch
 ```
 
+`Watch` starts a local MockNotion service with fictional articles, so normal local development does not require Notion credentials or a Pulumi ESC environment.
+
 ## Testing
 
 ```bash
