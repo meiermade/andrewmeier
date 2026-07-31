@@ -55,27 +55,58 @@ test('article filters support keyboard navigation and selection', async ({ page 
     await page.goto('/articles', { waitUntil: 'domcontentloaded' })
     await page.getByText('+ Add filter', { exact: true }).click()
 
-    const select = page.locator(`el-select[name="${filter.name}"]`)
-    const button = select.getByRole('button', { name: filter.ariaLabel })
-    const options = select.locator('el-options')
-    const selectedOption = select.locator(`el-option[value="${filter.value}"]`)
+    const select = page.locator('[data-select-root]').filter({ has: page.locator(`input[name="${filter.name}"]`) })
+    const button = select.getByRole('combobox', { name: filter.ariaLabel })
+    const options = select.getByRole('listbox')
+    const selectedOption = select.locator(`[role="option"][value="${filter.value}"]`)
 
     await button.focus()
     await button.press('ArrowDown')
     await expect(options).toBeVisible()
-    await expect(select.locator('el-option').first()).toBeFocused()
+    await expect(select.getByRole('option').first()).toBeFocused()
 
     await page.keyboard.press('Escape')
     await expect(options).toBeHidden()
     await expect(button).toBeFocused()
 
     await button.press('ArrowDown')
+    await expect(select.getByRole('option').first()).toBeFocused()
     await page.keyboard.press('ArrowDown')
     await expect(selectedOption).toBeFocused()
     await page.keyboard.press('Enter')
 
     await expect(page).toHaveURL(new RegExp(`[?&]${filter.name}=${filter.value}(?:&|$)`))
   }
+})
+
+test('navigation menus work by keyboard without Tailwind Elements', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  await expect(page.locator('el-dropdown, el-menu, el-select, el-options, el-option')).toHaveCount(0)
+
+  const themeButton = page.getByRole('button', { name: 'Choose theme' })
+  const themeMenu = page.getByRole('menu', { name: 'Theme' })
+  await themeButton.focus()
+  await themeButton.press('ArrowDown')
+  await expect(themeMenu).toBeVisible()
+  await expect(page.getByRole('menuitemradio', { name: 'Light' })).toBeFocused()
+  await page.keyboard.press('ArrowDown')
+  await expect(page.getByRole('menuitemradio', { name: 'Dark' })).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(themeMenu).toBeHidden()
+  await expect(themeButton).toBeFocused()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const navigationButton = page.getByRole('button', { name: 'Open navigation' })
+  const navigationMenu = page.getByRole('menu', { name: 'Navigation' })
+  await navigationButton.focus()
+  await navigationButton.press('ArrowDown')
+  await expect(navigationMenu).toBeVisible()
+  await expect(navigationMenu.getByRole('menuitem').first()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(navigationMenu).toBeHidden()
+  await expect(navigationButton).toBeFocused()
 })
 
 test('legacy company paths permanently redirect to Meier Made', async ({ request }) => {

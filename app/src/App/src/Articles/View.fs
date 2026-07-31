@@ -6,7 +6,6 @@ open App.Common.View
 open System
 open type Datastar
 open type Html
-open type Tailwind
 
 type FilterState =
     { search: string option
@@ -33,57 +32,6 @@ type ArticlesPageState =
       filters: FilterState
       tags: string list
       years: int list }
-
-module FilterControl =
-    let private attributeValue (value:string) =
-        System.Net.WebUtility.HtmlEncode value
-
-    let select (name:string) (options:(string * string) list) (selected:string) (ariaLabel:string) (onChange:string) (buttonClass:string) =
-        let selectedValue =
-            options
-            |> List.tryFind (fun (value, _) -> value = selected)
-            |> Option.orElse (options |> List.tryHead)
-            |> Option.map fst
-            |> Option.defaultValue ""
-        let selectedLabel =
-            options
-            |> List.tryFind (fun (value, _) -> value = selectedValue)
-            |> Option.map snd
-            |> Option.defaultValue ""
-
-        elSelect {
-            _name name
-            _value (attributeValue selectedValue)
-            _dataOn ("change", onChange)
-            _class "relative"
-            button {
-                _type "button"
-                _ariaLabel ariaLabel
-                _class buttonClass
-                span { _class "block min-w-0 truncate"; selectedLabel }
-                span {
-                    _class "pointer-events-none ml-2 flex size-5 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400"
-                    _ariaHidden "true"
-                    raw """<svg viewBox="0 0 20 20" fill="currentColor" class="size-4"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" /></svg>"""
-                }
-            }
-            elOptions {
-                _popover
-                _anchor "bottom end"
-                _class "z-40 max-h-64 min-w-(--button-width) overflow-auto rounded-lg border border-gray-300 bg-white py-1 shadow-xl [--anchor-gap:4px] dark:border-gray-600 dark:bg-gray-800"
-                for value, label in options do
-                    elOption {
-                        _value (attributeValue value)
-                        _class "group flex w-full cursor-default items-center justify-between gap-3 px-3 py-2 text-left text-sm text-gray-800 transition hover:bg-gray-100 focus:bg-gray-100 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 aria-selected:bg-gray-100 aria-selected:font-semibold dark:text-gray-100 dark:hover:bg-gray-700 dark:focus:bg-gray-700 dark:focus-visible:outline-emerald-400 dark:aria-selected:bg-gray-700"
-                        span { _class "truncate"; label }
-                        span {
-                            _class "invisible text-emerald-600 group-aria-selected:visible dark:text-emerald-400"
-                            _ariaHidden "true"
-                            "✓"
-                        }
-                    }
-            }
-        }
 
 let articlesPage (state:ArticlesPageState) =
     let filters = state.filters
@@ -152,7 +100,7 @@ let articlesPage (state:ArticlesPageState) =
                                         label {
                                             _class "grid gap-1 text-sm"
                                             span { _class "font-medium text-gray-900 dark:text-gray-100"; "Tag" }
-                                            FilterControl.select
+                                            FormControl.select
                                                 "tag"
                                                 (("", "Select tag") :: (state.tags |> List.map (fun tag -> tag, tag)))
                                                 ""
@@ -164,7 +112,7 @@ let articlesPage (state:ArticlesPageState) =
                                         label {
                                             _class "grid gap-1 text-sm"
                                             span { _class "font-medium text-gray-900 dark:text-gray-100"; "Published" }
-                                            FilterControl.select
+                                            FormControl.select
                                                 "year"
                                                 (("", "Select year") :: (state.years |> List.map (fun year -> string year, string year)))
                                                 ""
@@ -184,7 +132,7 @@ let articlesPage (state:ArticlesPageState) =
                                 div {
                                     _class "inline-flex items-center rounded-md border border-gray-300 bg-gray-50 text-sm dark:border-gray-600 dark:bg-gray-800"
                                     span { _class "border-r border-gray-300 px-2 py-1.5 font-medium text-gray-500 dark:border-gray-600 dark:text-gray-400"; "Tag" }
-                                    FilterControl.select
+                                    FormControl.select
                                         "tag"
                                         (state.tags |> List.map (fun tagOption -> tagOption, tagOption))
                                         tag
@@ -204,7 +152,7 @@ let articlesPage (state:ArticlesPageState) =
                                 div {
                                     _class "inline-flex items-center rounded-md border border-gray-300 bg-gray-50 text-sm dark:border-gray-600 dark:bg-gray-800"
                                     span { _class "border-r border-gray-300 px-2 py-1.5 font-medium text-gray-500 dark:border-gray-600 dark:text-gray-400"; "Published" }
-                                    FilterControl.select
+                                    FormControl.select
                                         "year"
                                         (state.years |> List.map (fun yearOption -> string yearOption, string yearOption))
                                         (string year)
