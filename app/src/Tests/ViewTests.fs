@@ -40,18 +40,20 @@ let tests =
                 Expect.isFalse (profile.Contains "Currently working at") "Expected current-employer claim to be removed"
             }
 
-            test "uses Datastar navigation menus without Tailwind Elements" {
+            test "uses Datastar navigation disclosures without emulated menus" {
                 let navigation = Render.toHtmlDocString TopNav.primary
 
-                Expect.stringContains navigation "data-menu-root" "Expected hand-rolled Datastar menus"
-                Expect.stringContains navigation "aria-haspopup=\"menu\"" "Expected accessible menu triggers"
-                Expect.stringContains navigation "role=\"menu\"" "Expected accessible menu containers"
+                Expect.stringContains navigation "data-disclosure-root" "Expected hand-rolled Datastar disclosures"
+                Expect.stringContains navigation "aria-expanded" "Expected accessible disclosure triggers"
+                Expect.stringContains navigation "aria-controls" "Expected triggers to identify disclosure panels"
+                Expect.isFalse (navigation.Contains "role=\"menu\"") "Expected native links and buttons instead of emulated menus"
+                Expect.isFalse (navigation.Contains "role=\"menuitem") "Expected native links and buttons instead of emulated menu items"
                 Expect.isFalse (navigation.Contains "<el-") "Expected no Tailwind Elements navigation"
             }
         ]
 
         testList "Articles" [
-            test "uses accessible Datastar listbox controls for article filters" {
+            test "uses accessible Datastar disclosures with canonical filter links" {
                 let page =
                     App.Articles.View.articlesPage {
                         articles = []
@@ -62,10 +64,13 @@ let tests =
 
                 let html = Render.toHtmlDocString page
 
-                Expect.stringContains html "data-select-root" "Expected hand-rolled Datastar filter select"
-                Expect.stringContains html "role=\"combobox\"" "Expected accessible filter trigger"
-                Expect.stringContains html "role=\"listbox\"" "Expected accessible options container"
-                Expect.stringContains html "role=\"option\"" "Expected accessible filter options"
+                Expect.stringContains html "data-filter-control=\"tag\"" "Expected a hand-rolled Datastar tag disclosure"
+                Expect.stringContains html "data-filter-control=\"year\"" "Expected a hand-rolled Datastar year disclosure"
+                Expect.stringContains html "href=\"/articles?tag=Finance\"" "Expected canonical tag filter link"
+                Expect.stringContains html "href=\"/articles?year=2026\"" "Expected canonical year filter link"
+                Expect.isFalse (html.Contains "role=\"combobox\"") "Expected no emulated combobox"
+                Expect.isFalse (html.Contains "role=\"listbox\"") "Expected no emulated listbox"
+                Expect.isFalse (html.Contains "data-select-root") "Expected no custom select state machine"
                 Expect.isFalse (html.Contains "<el-") "Expected no Tailwind Elements controls"
                 Expect.isFalse (html.Contains "<select") "Expected article filters not to render native selects"
             }
@@ -87,9 +92,10 @@ let tests =
                     |> Seq.map _.Groups.[1].Value
                     |> String.concat "\n"
 
-                Expect.stringContains html "value=\"Andy&#39;s &quot;Notes&quot;\"" "Expected safely encoded option value"
+                Expect.stringContains html "Andy&#39;s &quot;Notes&quot;" "Expected safely encoded option text"
                 Expect.isFalse (expressions.Contains unsafeValue) "Expected user-derived values to stay out of Datastar expressions"
                 Expect.isFalse (expressions.Contains "Andy&#39;s") "Expected encoded user-derived values to stay out of Datastar expressions"
+                Expect.isFalse (html.Contains "data-select-root") "Expected no custom select state machine"
             }
 
             test "identifies articles as personal writing" {
@@ -178,6 +184,8 @@ let tests =
                 Expect.stringContains html "postPath:'/i/v1'" "Expected custom Snowplow post path"
                 Expect.stringContains html "appId:'andymeier-dev'" "Expected Snowplow app id"
                 Expect.isFalse (html.Contains "tailwindplus-elements") "Expected no Tailwind Elements runtime"
+                Expect.isFalse (html.Contains "const itemsFor") "Expected no global interaction state machine"
+                Expect.isFalse (html.Contains "data-select-root") "Expected no custom select state machine"
                 Expect.isFalse (html.Contains "<el-") "Expected no Tailwind Elements markup"
             }
         ]

@@ -33,6 +33,53 @@ type ArticlesPageState =
       tags: string list
       years: int list }
 
+type FilterOption =
+    { label: string
+      url: string
+      selected: bool }
+
+module FilterControl =
+    let private optionLink (option:FilterOption) =
+        a {
+            _href option.url
+            _class "group flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-gray-800 transition hover:bg-gray-100 focus:bg-gray-100 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus:bg-gray-700 dark:focus-visible:outline-emerald-400"
+            span { _class "truncate"; option.label }
+            span {
+                _class (if option.selected then "text-emerald-600 dark:text-emerald-400" else "invisible")
+                _ariaHidden "true"
+                "✓"
+            }
+        }
+
+    let disclosure (name:string) (ariaLabel:string) (selectedLabel:string) (options:FilterOption list) (buttonClass:string) =
+        div {
+            _class "contents"
+            _data ("filter-control", name)
+            Disclosure.panel {
+                id = $"filter-{name}"
+                openSignal = $"{name}FilterOpen"
+                triggerLabel = ariaLabel
+                rootClass = "relative"
+                triggerClass = buttonClass
+                triggerContent =
+                    span {
+                        _class "contents"
+                        span { _class "block min-w-0 truncate"; selectedLabel }
+                        span {
+                            _class "pointer-events-none ml-2 flex size-5 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400"
+                            _ariaHidden "true"
+                            raw """<svg viewBox="0 0 20 20" fill="currentColor" class="size-4"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" /></svg>"""
+                        }
+                    }
+                panelLabel = ariaLabel
+                panelClass = "absolute right-0 top-full z-40 mt-1 max-h-64 w-full min-w-48 overflow-auto rounded-lg border border-gray-300 bg-white py-1 shadow-xl dark:border-gray-600 dark:bg-gray-800"
+                panelContent = options |> List.map optionLink
+            }
+        }
+
+let private attributeValue (value:string) =
+    System.Net.WebUtility.HtmlEncode value
+
 let articlesPage (state:ArticlesPageState) =
     let filters = state.filters
     let hasSearch = filters.search.IsSome
@@ -40,6 +87,18 @@ let articlesPage (state:ArticlesPageState) =
     let hasCriteria = hasSearch || hasActiveFilters
     let clearSearchUrl = FilterState.url { filters with search = None }
     let clearFiltersUrl = FilterState.url { filters with tag = None; publishedYear = None }
+    let tagOptions =
+        state.tags
+        |> List.map (fun tag ->
+            { label = tag
+              url = FilterState.url { filters with tag = Some tag }
+              selected = filters.tag = Some tag })
+    let yearOptions =
+        state.years
+        |> List.map (fun year ->
+            { label = string year
+              url = FilterState.url { filters with publishedYear = Some year }
+              selected = filters.publishedYear = Some year })
     let searchInputClass =
         "w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition placeholder:text-gray-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-400/20"
         + if hasSearch then " pr-10" else ""
@@ -61,6 +120,12 @@ let articlesPage (state:ArticlesPageState) =
                     _method "get"
                     _action "/articles"
                     _class "border-b border-gray-300/60 py-4 dark:border-gray-700/60"
+                    match filters.tag with
+                    | Some tag -> input { _type "hidden"; _name "tag"; _value (attributeValue tag) }
+                    | None -> ()
+                    match filters.publishedYear with
+                    | Some year -> input { _type "hidden"; _name "year"; _value (string year) }
+                    | None -> ()
                     div {
                         _class "flex flex-col gap-2 sm:flex-row sm:items-center"
                         label {
@@ -73,7 +138,7 @@ let articlesPage (state:ArticlesPageState) =
                                     _role "searchbox"
                                     _name "search"
                                     _ariaLabel "Search articles"
-                                    _value (filters.search |> Option.defaultValue "")
+                                    _value (filters.search |> Option.defaultValue "" |> attributeValue)
                                     _placeholder "Search articles"
                                     _class searchInputClass
                                 }
@@ -97,28 +162,26 @@ let articlesPage (state:ArticlesPageState) =
                                 div {
                                     _class "z-30 mt-2 grid w-full gap-3 rounded-lg border border-gray-300 bg-white p-3 shadow-xl sm:absolute sm:right-0 sm:w-auto sm:min-w-64 dark:border-gray-700 dark:bg-gray-900"
                                     if filters.tag.IsNone then
-                                        label {
+                                        div {
                                             _class "grid gap-1 text-sm"
                                             span { _class "font-medium text-gray-900 dark:text-gray-100"; "Tag" }
-                                            FormControl.select
+                                            FilterControl.disclosure
                                                 "tag"
-                                                (("", "Select tag") :: (state.tags |> List.map (fun tag -> tag, tag)))
-                                                ""
                                                 "Tag filter"
-                                                "el.closest('form').requestSubmit()"
-                                                "inline-flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:outline-emerald-400"
+                                                "Select tag"
+                                                tagOptions
+                                                "inline-flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:outline-emerald-400"
                                         }
                                     if filters.publishedYear.IsNone then
-                                        label {
+                                        div {
                                             _class "grid gap-1 text-sm"
                                             span { _class "font-medium text-gray-900 dark:text-gray-100"; "Published" }
-                                            FormControl.select
+                                            FilterControl.disclosure
                                                 "year"
-                                                (("", "Select year") :: (state.years |> List.map (fun year -> string year, string year)))
-                                                ""
                                                 "Published year filter"
-                                                "el.closest('form').requestSubmit()"
-                                                "inline-flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm outline-none transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:outline-emerald-400"
+                                                "Select year"
+                                                yearOptions
+                                                "inline-flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:outline-emerald-400"
                                         }
                                 }
                             }
@@ -132,13 +195,12 @@ let articlesPage (state:ArticlesPageState) =
                                 div {
                                     _class "inline-flex items-center rounded-md border border-gray-300 bg-gray-50 text-sm dark:border-gray-600 dark:bg-gray-800"
                                     span { _class "border-r border-gray-300 px-2 py-1.5 font-medium text-gray-500 dark:border-gray-600 dark:text-gray-400"; "Tag" }
-                                    FormControl.select
+                                    FilterControl.disclosure
                                         "tag"
-                                        (state.tags |> List.map (fun tagOption -> tagOption, tagOption))
-                                        tag
                                         "Tag filter"
-                                        "el.closest('form').requestSubmit()"
-                                        "inline-flex items-center bg-transparent py-1.5 pl-2 pr-1 font-medium text-gray-900 outline-none focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-100 dark:focus-visible:outline-emerald-400"
+                                        tag
+                                        tagOptions
+                                        "inline-flex items-center bg-transparent py-1.5 pl-2 pr-1 font-medium text-gray-900 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-100 dark:focus-visible:outline-emerald-400"
                                     a {
                                         _href (FilterState.url { filters with tag = None })
                                         _ariaLabel "Remove tag filter"
@@ -152,13 +214,12 @@ let articlesPage (state:ArticlesPageState) =
                                 div {
                                     _class "inline-flex items-center rounded-md border border-gray-300 bg-gray-50 text-sm dark:border-gray-600 dark:bg-gray-800"
                                     span { _class "border-r border-gray-300 px-2 py-1.5 font-medium text-gray-500 dark:border-gray-600 dark:text-gray-400"; "Published" }
-                                    FormControl.select
+                                    FilterControl.disclosure
                                         "year"
-                                        (state.years |> List.map (fun yearOption -> string yearOption, string yearOption))
-                                        (string year)
                                         "Published year filter"
-                                        "el.closest('form').requestSubmit()"
-                                        "inline-flex items-center bg-transparent py-1.5 pl-2 pr-1 font-medium text-gray-900 outline-none focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-100 dark:focus-visible:outline-emerald-400"
+                                        (string year)
+                                        yearOptions
+                                        "inline-flex items-center bg-transparent py-1.5 pl-2 pr-1 font-medium text-gray-900 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-100 dark:focus-visible:outline-emerald-400"
                                     a {
                                         _href (FilterState.url { filters with publishedYear = None })
                                         _ariaLabel "Remove published year filter"

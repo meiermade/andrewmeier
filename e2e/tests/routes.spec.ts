@@ -45,7 +45,7 @@ test('local article search and detail routes use MockNotion fixtures', async ({ 
   await expect(page.getByText('Finance', { exact: true }).first()).toBeVisible()
 })
 
-test('article filters support keyboard navigation and selection', async ({ page }) => {
+test('article filter disclosures support native keyboard selection', async ({ page }) => {
   test.skip(isRemote, 'Published production filters are not deterministic fixtures.')
 
   for (const filter of [
@@ -55,57 +55,62 @@ test('article filters support keyboard navigation and selection', async ({ page 
     await page.goto('/articles', { waitUntil: 'domcontentloaded' })
     await page.getByText('+ Add filter', { exact: true }).click()
 
-    const select = page.locator('[data-select-root]').filter({ has: page.locator(`input[name="${filter.name}"]`) })
-    const button = select.getByRole('combobox', { name: filter.ariaLabel })
-    const options = select.getByRole('listbox')
-    const selectedOption = select.locator(`[role="option"][value="${filter.value}"]`)
+    const disclosure = page.locator(`[data-filter-control="${filter.name}"]`)
+    const button = disclosure.getByRole('button', { name: filter.ariaLabel })
+    const panel = disclosure.locator('[data-disclosure-panel]')
+    const option = disclosure.getByRole('link', { name: filter.value, exact: true })
 
     await button.focus()
-    await button.press('ArrowDown')
-    await expect(options).toBeVisible()
-    await expect(select.getByRole('option').first()).toBeFocused()
+    await button.press('Enter')
+    await expect(panel).toBeVisible()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+    await page.keyboard.press('Tab')
+    await expect(option).toBeFocused()
 
     await page.keyboard.press('Escape')
-    await expect(options).toBeHidden()
+    await expect(panel).toBeHidden()
     await expect(button).toBeFocused()
 
-    await button.press('ArrowDown')
-    await expect(select.getByRole('option').first()).toBeFocused()
-    await page.keyboard.press('ArrowDown')
-    await expect(selectedOption).toBeFocused()
+    await button.press('Space')
+    await expect(panel).toBeVisible()
+    await page.keyboard.press('Tab')
+    await expect(option).toBeFocused()
     await page.keyboard.press('Enter')
 
     await expect(page).toHaveURL(new RegExp(`[?&]${filter.name}=${filter.value}(?:&|$)`))
   }
 })
 
-test('navigation menus work by keyboard without Tailwind Elements', async ({ page }) => {
+test('navigation disclosures use native keyboard behavior without Tailwind Elements', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' })
 
   await expect(page.locator('el-dropdown, el-menu, el-select, el-options, el-option')).toHaveCount(0)
+  await expect(page.locator('[role="menu"], [role="menuitem"], [role="menuitemradio"]')).toHaveCount(0)
 
   const themeButton = page.getByRole('button', { name: 'Choose theme' })
-  const themeMenu = page.getByRole('menu', { name: 'Theme' })
+  const themePanel = page.locator('#theme-panel')
   await themeButton.focus()
-  await themeButton.press('ArrowDown')
-  await expect(themeMenu).toBeVisible()
-  await expect(page.getByRole('menuitemradio', { name: 'Light' })).toBeFocused()
-  await page.keyboard.press('ArrowDown')
-  await expect(page.getByRole('menuitemradio', { name: 'Dark' })).toBeFocused()
+  await themeButton.press('Enter')
+  await expect(themePanel).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: 'Light' })).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: 'Dark' })).toBeFocused()
   await page.keyboard.press('Enter')
-  await expect(themeMenu).toBeHidden()
+  await expect(themePanel).toBeHidden()
   await expect(themeButton).toBeFocused()
   await expect(page.locator('html')).toHaveClass(/dark/)
 
   await page.setViewportSize({ width: 390, height: 844 })
   const navigationButton = page.getByRole('button', { name: 'Open navigation' })
-  const navigationMenu = page.getByRole('menu', { name: 'Navigation' })
+  const navigationPanel = page.locator('#navigation-panel')
   await navigationButton.focus()
-  await navigationButton.press('ArrowDown')
-  await expect(navigationMenu).toBeVisible()
-  await expect(navigationMenu.getByRole('menuitem').first()).toBeFocused()
+  await navigationButton.press('Space')
+  await expect(navigationPanel).toBeVisible()
+  await page.keyboard.press('Tab')
+  await expect(navigationPanel.getByRole('link', { name: 'Articles' })).toBeFocused()
   await page.keyboard.press('Escape')
-  await expect(navigationMenu).toBeHidden()
+  await expect(navigationPanel).toBeHidden()
   await expect(navigationButton).toBeFocused()
 })
 

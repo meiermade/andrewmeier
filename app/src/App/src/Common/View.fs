@@ -92,220 +92,51 @@ module MiniIcon =
     let close =
         raw """<svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>"""
 
-module FormControl =
-    let private attributeValue (value:string) =
-        System.Net.WebUtility.HtmlEncode value
+type DisclosureConfig =
+    { id: string
+      openSignal: string
+      triggerLabel: string
+      rootClass: string
+      triggerClass: string
+      triggerContent: HtmlElement
+      panelLabel: string
+      panelClass: string
+      panelContent: HtmlElement list }
 
-    let select (name:string) (options:(string * string) list) (selected:string) (ariaLabel:string) (onChange:string) (buttonClass:string) =
-        let selectedValue =
-            options
-            |> List.tryFind (fun (value, _) -> value = selected)
-            |> Option.orElse (options |> List.tryHead)
-            |> Option.map fst
-            |> Option.defaultValue ""
-        let selectedLabel =
-            options
-            |> List.tryFind (fun (value, _) -> value = selectedValue)
-            |> Option.map snd
-            |> Option.defaultValue ""
-        let prefix = "select_" + System.Guid.NewGuid().ToString("N")
-        let openSignal = prefix + "Open"
-        let buttonId = prefix + "Button"
-        let optionsId = prefix + "Options"
+module Disclosure =
+    let panel (config:DisclosureConfig) =
+        let buttonId = config.id + "-button"
+        let panelId = config.id + "-panel"
+        let escapeExpression =
+            $"evt.key == 'Escape' && ${config.openSignal} && ((${config.openSignal} = false), document.getElementById('{buttonId}').focus(), true)"
 
         div {
-            _class "relative"
-            _data ("select-root", "")
-            _data ("signals", $"{{ {openSignal}: false }}")
-            input {
-                _type "hidden"
-                _name name
-                _value (attributeValue selectedValue)
-            }
+            _class config.rootClass
+            _data ("disclosure-root", "")
+            _data ("signals", $"{{ {config.openSignal}: false }}")
+            _data ("on:keydown__window", escapeExpression)
             button {
                 _id buttonId
                 _type "button"
-                _role "combobox"
-                _ariaHaspopup "listbox"
-                _attr ("aria-controls", optionsId)
-                _ariaLabel ariaLabel
-                _data ("select-button", "")
-                _data ("attr:aria-expanded", $"${openSignal} ? 'true' : 'false'")
-                _data ("on:click__stop", $"${openSignal} = !${openSignal}")
-                _class buttonClass
-                span { _class "block min-w-0 truncate"; selectedLabel }
-                span {
-                    _class "pointer-events-none ml-2 flex size-5 shrink-0 items-center justify-center text-gray-500 dark:text-gray-400"
-                    _ariaHidden "true"
-                    raw """<svg viewBox="0 0 20 20" fill="currentColor" class="size-4"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" /></svg>"""
-                }
+                _ariaLabel config.triggerLabel
+                _attr ("aria-controls", panelId)
+                _data ("disclosure-button", "")
+                _data ("attr:aria-expanded", $"${config.openSignal} ? 'true' : 'false'")
+                _data ("on:click__stop", $"${config.openSignal} = !${config.openSignal}")
+                _class config.triggerClass
+                config.triggerContent
             }
             div {
-                _id optionsId
-                _role "listbox"
-                _attr ("aria-labelledby", buttonId)
-                _data ("select-options", "")
-                _data ("show", $"${openSignal}")
-                _data ("on:click__outside", $"${openSignal} = false")
+                _id panelId
+                _role "group"
+                _ariaLabel config.panelLabel
+                _data ("disclosure-panel", "")
+                _data ("show", $"${config.openSignal}")
+                _data ("on:click__outside", $"${config.openSignal} = false")
                 _style "display:none"
-                _class "absolute right-0 top-full z-40 mt-1 max-h-64 min-w-full overflow-auto rounded-lg border border-gray-300 bg-white py-1 shadow-xl dark:border-gray-600 dark:bg-gray-800"
-                for value, label in options do
-                    let isSelected = value = selectedValue
-                    button {
-                        _type "button"
-                        _role "option"
-                        _tabindex -1
-                        _value (attributeValue value)
-                        _attr ("aria-selected", if isSelected then "true" else "false")
-                        _data ("select-option", "")
-                        _data ("on:click", $"el.closest('[data-select-root]').querySelector('input[type=hidden]').value = el.value; ${openSignal} = false; {onChange}")
-                        _class "group flex w-full cursor-default items-center justify-between gap-3 px-3 py-2 text-left text-sm text-gray-800 transition hover:bg-gray-100 focus:bg-gray-100 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 aria-selected:bg-gray-100 aria-selected:font-semibold dark:text-gray-100 dark:hover:bg-gray-700 dark:focus:bg-gray-700 dark:focus-visible:outline-emerald-400 dark:aria-selected:bg-gray-700"
-                        span { _class "truncate"; label }
-                        span {
-                            _class "invisible text-emerald-600 group-aria-selected:visible dark:text-emerald-400"
-                            _ariaHidden "true"
-                            "✓"
-                        }
-                    }
+                _class config.panelClass
+                for item in config.panelContent do item
             }
-        }
-
-module Interaction =
-    let script =
-        script {
-            raw """
-                (() => {
-                    const itemsFor = (root, selector) => [...root.querySelectorAll(selector)];
-                    const triggerFor = (root, selector) => root.querySelector(selector);
-                    const focusAfterOpen = (root, selector, position, selectedSelector) => requestAnimationFrame(() => {
-                        const items = itemsFor(root, selector);
-                        if (items.length === 0) return;
-                        const selected = selectedSelector ? items.findIndex(item => item.matches(selectedSelector)) : -1;
-                        const index = position === 'first' ? 0
-                            : position === 'last' ? items.length - 1
-                            : selected >= 0 ? selected : 0;
-                        items[index].focus();
-                    });
-                    const openAndFocus = (root, triggerSelector, itemSelector, position, selectedSelector) => {
-                        const trigger = triggerFor(root, triggerSelector);
-                        if (trigger?.getAttribute('aria-expanded') !== 'true') trigger?.click();
-                        focusAfterOpen(root, itemSelector, position, selectedSelector);
-                    };
-                    const closeAndFocus = (root, triggerSelector) => {
-                        const trigger = triggerFor(root, triggerSelector);
-                        if (trigger?.getAttribute('aria-expanded') === 'true') trigger.click();
-                        trigger?.focus();
-                    };
-                    const moveFocus = (items, current, key) => {
-                        if (items.length === 0) return;
-                        const index = key === 'Home' ? 0
-                            : key === 'End' ? items.length - 1
-                            : Math.max(0, Math.min(items.length - 1, current + (key === 'ArrowDown' ? 1 : -1)));
-                        items[index]?.focus();
-                    };
-                    const focusByTypeahead = (items, current, event) => {
-                        if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
-                        const query = event.key.toLocaleLowerCase();
-                        const match = items
-                            .slice(current + 1)
-                            .concat(items.slice(0, current + 1))
-                            .find(item => item.textContent.trim().toLocaleLowerCase().startsWith(query));
-                        if (match) {
-                            event.preventDefault();
-                            match.focus();
-                        }
-                    };
-
-                    document.addEventListener('keydown', event => {
-                        if (!(event.target instanceof Element)) return;
-
-                        const selectRoot = event.target.closest('[data-select-root]');
-                        if (selectRoot) {
-                            const trigger = event.target.closest('[data-select-button]');
-                            const option = event.target.closest('[data-select-option]');
-                            const options = itemsFor(selectRoot, '[data-select-option]');
-                            if (trigger && ['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
-                                event.preventDefault();
-                                openAndFocus(selectRoot, '[data-select-button]', '[data-select-option]', 'selected', '[aria-selected="true"]');
-                            } else if (trigger && event.key === 'Home') {
-                                event.preventDefault();
-                                openAndFocus(selectRoot, '[data-select-button]', '[data-select-option]', 'first');
-                            } else if (trigger && event.key === 'End') {
-                                event.preventDefault();
-                                openAndFocus(selectRoot, '[data-select-button]', '[data-select-option]', 'last');
-                            } else if (trigger && event.key === 'Escape') {
-                                event.preventDefault();
-                                closeAndFocus(selectRoot, '[data-select-button]');
-                            } else if (option) {
-                                const current = options.indexOf(option);
-                                if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-                                    event.preventDefault();
-                                    moveFocus(options, current, event.key);
-                                } else if (event.key === 'Enter' || event.key === ' ') {
-                                    event.preventDefault();
-                                    option.click();
-                                } else if (event.key === 'Escape') {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    closeAndFocus(selectRoot, '[data-select-button]');
-                                } else if (event.key === 'Tab') {
-                                    const trigger = triggerFor(selectRoot, '[data-select-button]');
-                                    if (trigger?.getAttribute('aria-expanded') === 'true') trigger.click();
-                                } else {
-                                    focusByTypeahead(options, current, event);
-                                }
-                            }
-                            return;
-                        }
-
-                        const menuRoot = event.target.closest('[data-menu-root]');
-                        if (!menuRoot) return;
-                        const trigger = event.target.closest('[data-menu-button]');
-                        const item = event.target.closest('[data-menu-item]');
-                        const items = itemsFor(menuRoot, '[data-menu-item]');
-                        if (trigger && ['ArrowDown', 'Enter', ' '].includes(event.key)) {
-                            event.preventDefault();
-                            openAndFocus(menuRoot, '[data-menu-button]', '[data-menu-item]', 'first');
-                        } else if (trigger && event.key === 'ArrowUp') {
-                            event.preventDefault();
-                            openAndFocus(menuRoot, '[data-menu-button]', '[data-menu-item]', 'last');
-                        } else if (trigger && event.key === 'Escape') {
-                            event.preventDefault();
-                            closeAndFocus(menuRoot, '[data-menu-button]');
-                        } else if (item) {
-                            const current = items.indexOf(item);
-                            if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
-                                event.preventDefault();
-                                moveFocus(items, current, event.key);
-                            } else if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                item.click();
-                            } else if (event.key === 'Escape') {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                closeAndFocus(menuRoot, '[data-menu-button]');
-                            } else if (event.key === 'Tab') {
-                                const menuTrigger = triggerFor(menuRoot, '[data-menu-button]');
-                                if (menuTrigger?.getAttribute('aria-expanded') === 'true') menuTrigger.click();
-                            } else {
-                                focusByTypeahead(items, current, event);
-                            }
-                        }
-                    });
-
-                    document.addEventListener('click', event => {
-                        if (!(event.target instanceof Element)) return;
-                        for (const [itemSelector, rootSelector, triggerSelector] of [
-                            ['[data-select-option]', '[data-select-root]', '[data-select-button]'],
-                            ['[data-menu-item]', '[data-menu-root]', '[data-menu-button]'],
-                        ]) {
-                            const item = event.target.closest(itemSelector);
-                            const root = item?.closest(rootSelector);
-                            if (root) requestAnimationFrame(() => triggerFor(root, triggerSelector)?.focus());
-                        }
-                    });
-                })();
-            """
         }
 
 module ArticleCard =
@@ -394,9 +225,6 @@ module TopNav =
         a {
             _id $"{id}-mobile"
             _href href
-            _role "menuitem"
-            _tabindex -1
-            _data ("menu-item", "")
             _class "block w-full cursor-pointer px-4 py-2 text-left text-sm transition hover:bg-gray-100 hover:text-emerald-600 focus:bg-gray-100 focus:text-emerald-600 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:hover:bg-gray-700/50 dark:hover:text-emerald-400 dark:focus:bg-gray-700/50 dark:focus:text-emerald-400 dark:focus-visible:outline-emerald-400"
             _dataClass ("text-emerald-600", $"$selectedNav == '{id}'")
             _dataClass ("dark:text-emerald-400", $"$selectedNav == '{id}'")
@@ -417,100 +245,50 @@ module TopNav =
     let private themeItem (value:string) (label:string) (icon:HtmlElement) =
         button {
             _type "button"
-            _role "menuitemradio"
-            _tabindex -1
-            _data ("menu-item", "")
-            _data ("attr:aria-checked", $"$theme == '{value}' ? 'true' : 'false'")
             _class "flex w-full items-center gap-2 px-4 py-2 text-sm transition hover:bg-gray-100 focus:bg-gray-100 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:hover:bg-gray-700/50 dark:focus:bg-gray-700/50 dark:focus-visible:outline-emerald-400"
             _dataClass ("text-emerald-600", $"$theme == '{value}'")
             _dataClass ("dark:text-emerald-400", $"$theme == '{value}'")
             _dataClass ("font-semibold", $"$theme == '{value}'")
             _dataClass ("text-gray-700", $"$theme != '{value}'")
             _dataClass ("dark:text-gray-300", $"$theme != '{value}'")
-            _dataOn ("click", $"$theme = '{value}'; $themeMenuOpen = false; setTheme('{value}')")
+            _dataOn ("click", $"$theme = '{value}'; $themeOpen = false; setTheme('{value}'); document.getElementById('theme-button').focus()")
             icon
             text label
         }
 
     let private themeToggle =
-        div {
-            _class "relative inline-block text-left"
-            _data ("menu-root", "")
-            _data ("signals", "{ themeMenuOpen: false }")
-            button {
-                _id "theme-toggle"
-                _type "button"
-                _ariaLabel "Choose theme"
-                _ariaHaspopup "menu"
-                _attr ("aria-controls", "theme-menu")
-                _data ("menu-button", "")
-                _data ("attr:aria-expanded", "$themeMenuOpen ? 'true' : 'false'")
-                _data ("on:click__stop", "$themeMenuOpen = !$themeMenuOpen")
-                _class [
-                    "inline-flex w-full items-center justify-center rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-emerald-600"
-                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
-                    "dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-emerald-400 dark:focus-visible:outline-emerald-400"
-                    "hover:cursor-pointer"
-                ]
-                MiniIcon.sun
-                MiniIcon.moon
-            }
-            div {
-                _id "theme-menu"
-                _role "menu"
-                _ariaLabel "Theme"
-                _data ("menu", "")
-                _data ("show", "$themeMenuOpen")
-                _data ("on:click__outside", "$themeMenuOpen = false")
-                _style "display:none"
-                _class "absolute right-0 top-full z-40 mt-2 w-36 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
-                themeItem "light" "Light" MiniIcon.sunSmall
-                themeItem "dark" "Dark" MiniIcon.moonSmall
-                themeItem "system" "System" MiniIcon.monitor
-            }
+        Disclosure.panel {
+            id = "theme"
+            openSignal = "themeOpen"
+            triggerLabel = "Choose theme"
+            rootClass = "relative inline-block text-left"
+            triggerClass = "inline-flex w-full items-center justify-center rounded-md p-2 text-gray-600 hover:cursor-pointer hover:bg-gray-100 hover:text-emerald-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-emerald-400 dark:focus-visible:outline-emerald-400"
+            triggerContent = span { _class "contents"; MiniIcon.sun; MiniIcon.moon }
+            panelLabel = "Theme"
+            panelClass = "absolute right-0 top-full z-40 mt-2 w-36 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
+            panelContent =
+                [ themeItem "light" "Light" MiniIcon.sunSmall
+                  themeItem "dark" "Dark" MiniIcon.moonSmall
+                  themeItem "system" "System" MiniIcon.monitor ]
         }
 
     let private mobileDropdown =
-        div {
-            _class "relative inline-block text-left md:hidden"
-            _data ("menu-root", "")
-            _data ("signals", "{ mobileMenuOpen: false }")
-            button {
-                _id "menu-toggle"
-                _type "button"
-                _ariaLabel "Open navigation"
-                _ariaHaspopup "menu"
-                _attr ("aria-controls", "mobile-menu")
-                _data ("menu-button", "")
-                _data ("attr:aria-expanded", "$mobileMenuOpen ? 'true' : 'false'")
-                _data ("on:click__stop", "$mobileMenuOpen = !$mobileMenuOpen")
-                _class [
-                    "inline-flex w-full items-center justify-center rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-emerald-600"
-                    "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
-                    "dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-emerald-400 dark:focus-visible:outline-emerald-400"
-                    "hover:cursor-pointer"
-                ]
-                MiniIcon.hamburger
-            }
-            div {
-                _id "mobile-menu"
-                _role "menu"
-                _ariaLabel "Navigation"
-                _data ("menu", "")
-                _data ("show", "$mobileMenuOpen")
-                _data ("on:click__outside", "$mobileMenuOpen = false")
-                _style "display:none"
-                _class "absolute right-0 top-full z-40 mt-2 w-56 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
-                mobileItem("nav-articles", "Articles", "/articles")
-                a {
-                    _href "https://meiermade.com"
-                    _role "menuitem"
-                    _tabindex -1
-                    _data ("menu-item", "")
-                    _class "block w-full px-4 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-100 hover:text-emerald-600 focus:bg-gray-100 focus:text-emerald-600 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-emerald-400 dark:focus:bg-gray-700/50 dark:focus:text-emerald-400 dark:focus-visible:outline-emerald-400"
-                    "Meier Made"
-                }
-            }
+        Disclosure.panel {
+            id = "navigation"
+            openSignal = "navigationOpen"
+            triggerLabel = "Open navigation"
+            rootClass = "relative inline-block text-left md:hidden"
+            triggerClass = "inline-flex w-full items-center justify-center rounded-md p-2 text-gray-600 hover:cursor-pointer hover:bg-gray-100 hover:text-emerald-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-emerald-400 dark:focus-visible:outline-emerald-400"
+            triggerContent = span { _class "contents"; MiniIcon.hamburger }
+            panelLabel = "Navigation"
+            panelClass = "absolute right-0 top-full z-40 mt-2 w-56 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
+            panelContent =
+                [ mobileItem("nav-articles", "Articles", "/articles")
+                  a {
+                      _href "https://meiermade.com"
+                      _class "block w-full px-4 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-100 hover:text-emerald-600 focus:bg-gray-100 focus:text-emerald-600 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-emerald-400 dark:focus:bg-gray-700/50 dark:focus:text-emerald-400 dark:focus-visible:outline-emerald-400"
+                      "Meier Made"
+                  } ]
         }
 
     let primary =
@@ -599,7 +377,6 @@ type Document =
                         }
                     }
                 }
-                Interaction.script
                 script { js "function getInitialTheme(){return localStorage.getItem('theme')||'system'};function applyTheme(t){var d=document.documentElement,isDark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);d.classList.toggle('dark',isDark)};function setTheme(t){localStorage.setItem('theme',t);applyTheme(t)}" }
             }
         }
