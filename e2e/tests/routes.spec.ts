@@ -45,6 +45,39 @@ test('local article search and detail routes use MockNotion fixtures', async ({ 
   await expect(page.getByText('Finance', { exact: true }).first()).toBeVisible()
 })
 
+test('article filters support keyboard navigation and selection', async ({ page }) => {
+  test.skip(isRemote, 'Published production filters are not deterministic fixtures.')
+
+  for (const filter of [
+    { name: 'tag', ariaLabel: 'Tag filter', value: 'Engineering' },
+    { name: 'year', ariaLabel: 'Published year filter', value: '2026' },
+  ]) {
+    await page.goto('/articles', { waitUntil: 'domcontentloaded' })
+    await page.getByText('+ Add filter', { exact: true }).click()
+
+    const select = page.locator(`el-select[name="${filter.name}"]`)
+    const button = select.getByRole('button', { name: filter.ariaLabel })
+    const options = select.locator('el-options')
+    const selectedOption = select.locator(`el-option[value="${filter.value}"]`)
+
+    await button.focus()
+    await button.press('ArrowDown')
+    await expect(options).toBeVisible()
+    await expect(select.locator('el-option').first()).toBeFocused()
+
+    await page.keyboard.press('Escape')
+    await expect(options).toBeHidden()
+    await expect(button).toBeFocused()
+
+    await button.press('ArrowDown')
+    await page.keyboard.press('ArrowDown')
+    await expect(selectedOption).toBeFocused()
+    await page.keyboard.press('Enter')
+
+    await expect(page).toHaveURL(new RegExp(`[?&]${filter.name}=${filter.value}(?:&|$)`))
+  }
+})
+
 test('legacy company paths permanently redirect to Meier Made', async ({ request }) => {
   for (const path of ['/services', '/projects']) {
     const response = await request.get(path, { maxRedirects: 0 })

@@ -42,7 +42,7 @@ let tests =
         ]
 
         testList "Articles" [
-            test "uses custom listbox controls for article filters" {
+            test "uses accessible custom listbox controls for article filters" {
                 let page =
                     App.Articles.View.articlesPage {
                         articles = []
@@ -53,8 +53,25 @@ let tests =
 
                 let html = Render.toHtmlDocString page
 
-                Expect.stringContains html "data-select-root" "Expected custom filter select component"
+                Expect.stringContains html "<el-select" "Expected Tailwind Plus filter select"
+                Expect.stringContains html "<el-options" "Expected accessible options container"
+                Expect.stringContains html "<el-option" "Expected accessible filter options"
                 Expect.isFalse (html.Contains "<select") "Expected article filters not to render native selects"
+            }
+
+            test "encodes filter values as HTML attributes instead of JavaScript literals" {
+                let page =
+                    App.Articles.View.articlesPage {
+                        articles = []
+                        filters = { search = None; tag = None; publishedYear = None }
+                        tags = [ "Andy's \"Notes\"" ]
+                        years = [ 2026 ]
+                    }
+
+                let html = Render.toHtmlDocString page
+
+                Expect.stringContains html "value=\"Andy&#39;s &quot;Notes&quot;\"" "Expected safely encoded option value"
+                Expect.isFalse (html.Contains "data-select-root") "Expected no generated JavaScript filter literals"
             }
 
             test "identifies articles as personal writing" {
