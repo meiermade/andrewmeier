@@ -5,49 +5,101 @@ on:
       - main
     paths-ignore:
       - '**.md'
+
+concurrency:
+  group: andymeier-deploy
+  cancel-in-progress: false
+
 jobs:
   update:
     name: Update
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
-      pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24.x
       - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
         with:
           install_components: gke-gcloud-auth-plugin
       - name: Install Packages
         working-directory: ./pulumi
-        run: npm install
+        run: npm ci
       - name: TypeScript Check
         working-directory: ./pulumi
         run: npm run check
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           version: latest
       - name: Expose GitHub Actions cache env
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env['ACTIONS_CACHE_URL'])
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env['ACTIONS_RUNTIME_TOKEN'])
       - name: Authenticate Pulumi
-        uses: pulumi/auth-actions@v1
+        uses: pulumi/auth-actions@v2
         with:
           organization: meiermade
           requested-token-type: urn:pulumi:token-type:access_token:personal
           scope: user:meiermade
       - name: Update
-        uses: pulumi/actions@v6
+        uses: pulumi/actions@v7
         with:
           work-dir: ./pulumi
           command: up
           stack-name: prod
+
+  e2e:
+    name: E2E
+    needs: update
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: Install E2E packages
+        working-directory: ./e2e
+        run: npm ci
+      - name: Install Firefox
+        working-directory: ./e2e
+        run: npx playwright install --with-deps firefox
+      - name: Wait for deployed site
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error https://andymeier.dev/health >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Andy Meier site did not become ready." >&2
+          exit 1
+      - name: Run E2E against deployed site
+        working-directory: ./e2e
+        run: npx playwright test --project=firefox --retries=0
+        env:
+          E2E_START_LOCAL: '0'
+          SITE_E2E_BASE_URL: https://andymeier.dev
+      - name: Upload E2E diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: andymeier-deploy-e2e
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          if-no-files-found: ignore

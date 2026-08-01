@@ -30,7 +30,8 @@ let private telemetry () =
 
 let private notionConfig: Notion.Config =
     { articlesDatabaseId = Notion.DatabaseId.ofString "db"
-      apiKey = "token" }
+      apiKey = "token"
+      baseUrl = "https://api.notion.com/v1" }
 
 let private emptyNotionService: Notion.Service =
     { queryDatabase =

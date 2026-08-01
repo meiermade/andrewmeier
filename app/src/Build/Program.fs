@@ -4,8 +4,12 @@ open Fake.IO
 open Fake.IO.FileSystemOperators
 open System
 open System.IO
+open System.Net
+open System.Net.Http
+open System.Net.Sockets
 open System.Security.Cryptography
 open System.Text.Json
+open System.Threading
 open System.Threading.Tasks
 
 Environment.GetCommandLineArgs()
@@ -75,21 +79,36 @@ let exec command workDir args =
     |> CreateProcess.ensureExitCode
     |> Proc.start
     
-let getEnvMap () =
-    let env = "andymeier/local"
-    let pulumiEnv =
-        CreateProcess.fromRawCommand "pulumi" ["env"; "open"; env]
-        |> CreateProcess.withWorkingDirectory rootDir
-        |> CreateProcess.redirectOutput
-        |> CreateProcess.ensureExitCode
-        |> Proc.start
-    let rawPulumiEnvOutput = pulumiEnv.Result.Result.Output
-    let pulumiEnvOutput = JsonSerializer.Deserialize<{| environmentVariables:Map<string,string> |}>(rawPulumiEnvOutput)
-    pulumiEnvOutput.environmentVariables
+let availableLocalPort () =
+    use listener = new TcpListener(IPAddress.Loopback, 0)
+    listener.Start()
+    (listener.LocalEndpoint :?> IPEndPoint).Port
+
+let waitForHttpHealth (name:string) (url:string) =
+    use httpClient = new HttpClient()
+    let mutable healthy = false
+    let mutable attempt = 1
+
+    while not healthy && attempt <= 30 do
+        try
+            use response = httpClient.GetAsync(url).GetAwaiter().GetResult()
+            healthy <- response.IsSuccessStatusCode
+        with _ ->
+            ()
+
+        if not healthy then Thread.Sleep 500
+        attempt <- attempt + 1
+
+    if not healthy then failwith $"{name} did not become healthy at {url}"
 
 Target.create "StartDeps" <| fun _ ->
     Trace.trace "Starting dependencies (seq)"
     exec "docker-compose" rootDir ["up"; "-d"; "seq"] |> Task.WaitAll
+
+Target.create "StartMockNotion" <| fun _ ->
+    Trace.trace "Starting MockNotion"
+    exec "docker-compose" rootDir ["up"; "-d"; "--build"; "mock-notion"] |> Task.WaitAll
+    waitForHttpHealth "MockNotion" "http://localhost:5015/healthz"
 
 Target.create "EnsureDevCert" <| fun _ ->
     Trace.trace "Ensuring trusted ASP.NET Core HTTPS development certificate"
@@ -97,12 +116,19 @@ Target.create "EnsureDevCert" <| fun _ ->
 
 Target.create "Watch" <| fun _ ->
     let sqlitePath = rootDir </> ".data" </> "app.db"
+    let serverUrl = $"https://localhost:{availableLocalPort ()}"
+    Trace.trace $"Starting local server at {serverUrl}"
 
     let env =
-        getEnvMap()
-        |> Map.add "ASPNETCORE_ENVIRONMENT" "Development"
-        |> Map.add "SERVER_URL" "https://localhost:5000"
-        |> Map.add "SQLITE_PATH" sqlitePath
+        Map.ofList [
+            "ASPNETCORE_ENVIRONMENT", "Development"
+            "GOOGLE_ANALYTICS_MEASUREMENT_ID", "G-LOCAL"
+            "NOTION_API_KEY", "mock-notion-token"
+            "NOTION_ARTICLES_DATABASE_ID", "mock-articles"
+            "NOTION_BASE_URL", "http://localhost:5015/v1"
+            "SERVER_URL", serverUrl
+            "SQLITE_PATH", sqlitePath
+        ]
         |> EnvMap.ofMap
 
     let watchCss = exec "tailwindcss" appDir ["--input"; "./input.css"; "--output"; "./wwwroot/css/compiled.css"; "--watch"]
@@ -129,7 +155,8 @@ Target.create "Publish" <| fun _ ->
 
 Target.create "Default" (fun _ -> Target.listAvailable())
 
-"StartDeps" ==>! "EnsureDevCert"
+"StartDeps" ==>! "StartMockNotion"
+"StartMockNotion" ==>! "EnsureDevCert"
 "EnsureDevCert" ==>! "Watch"
 
 "BuildCss" ==>! "Publish"

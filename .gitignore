@@ -4,3 +4,5 @@
 node_modules
 .pi/
 app/.data/
+e2e/playwright-report/
+e2e/test-results/

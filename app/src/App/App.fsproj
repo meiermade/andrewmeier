@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <NoWarn>$(NoWarn);NU1510</NoWarn>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="input.css" />
@@ -14,10 +15,6 @@
     <Compile Include="src/Common/Handler.fs" />
     <Compile Include="src/Articles/View.fs" />
     <Compile Include="src/Articles/Handler.fs" />
-    <Compile Include="src/Services/View.fs" />
-    <Compile Include="src/Services/Handler.fs" />
-    <Compile Include="src/Projects/View.fs" />
-    <Compile Include="src/Projects/Handler.fs" />
     <Compile Include="src/Index/View.fs" />
     <Compile Include="src/Index/Handler.fs" />
     <Compile Include="src/Program.fs" />

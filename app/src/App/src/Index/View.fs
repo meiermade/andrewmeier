@@ -11,15 +11,6 @@ let aboutMe =
     p {
         _class "mt-4 text-lg text-gray-600 dark:text-gray-400"
         "Engineer working in finance, accounting, and capital markets."
-        br
-        br
-        "Currently working at "
-        a {
-            _href "https://aplazo.mx/"
-            _class "underline hover:text-emerald-600 dark:hover:text-emerald-400"
-            "Aplazo"
-        }
-        "."
     }
 
 let homePage (recentArticles:Article list) =

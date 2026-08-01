@@ -2,12 +2,13 @@ module App.Common.View
 
 open FSharp.ViewEngine
 open Domain.Article
+open System
 open System.Collections.Generic
 open System.IO
+open System.Net
 open System.Text.Json
 open type Html
 open type Datastar
-open type Tailwind
 
 module Asset =
     let resolveWithManifest (manifest:IReadOnlyDictionary<string, string>) (path:string) =
@@ -30,6 +31,52 @@ module Asset =
 
     let fingerprinted (path:string) =
         resolveWithManifest manifest.Value path
+
+module SafeOutput =
+    let private linkSchemes = Set.ofList [ Uri.UriSchemeHttp; Uri.UriSchemeHttps; Uri.UriSchemeMailto ]
+    let private imageSchemes = Set.ofList [ Uri.UriSchemeHttp; Uri.UriSchemeHttps ]
+
+    let attribute (value:string) =
+        WebUtility.HtmlEncode value
+
+    let private tryAbsoluteUrl (allowedSchemes:Set<string>) (value:string) =
+        match Uri.TryCreate(value, UriKind.Absolute) with
+        | true, uri when allowedSchemes.Contains(uri.Scheme.ToLowerInvariant()) ->
+            uri.GetComponents(UriComponents.AbsoluteUri, UriFormat.UriEscaped) |> Some
+        | _ -> None
+
+    let tryLinkAttribute (value:string) =
+        if value.StartsWith("#", StringComparison.Ordinal) then
+            value |> attribute |> Some
+        elif value.StartsWith("/", StringComparison.Ordinal) && not (value.StartsWith("//", StringComparison.Ordinal)) then
+            value |> attribute |> Some
+        else
+            value
+            |> tryAbsoluteUrl linkSchemes
+            |> Option.map attribute
+
+    let tryImageAttribute (value:string) =
+        value
+        |> tryAbsoluteUrl imageSchemes
+        |> Option.map attribute
+
+    let tryBackgroundImageStyle (value:string) =
+        value
+        |> tryAbsoluteUrl imageSchemes
+        |> Option.map (fun url ->
+            let cssUrl =
+                url
+                    .Replace("\\", "%5C", StringComparison.Ordinal)
+                    .Replace("'", "%27", StringComparison.Ordinal)
+                    .Replace("\"", "%22", StringComparison.Ordinal)
+                    .Replace("(", "%28", StringComparison.Ordinal)
+                    .Replace(")", "%29", StringComparison.Ordinal)
+
+            $"background-image: url('{cssUrl}')" |> attribute)
+
+module SiteUrl =
+    let article (permalink:string) =
+        $"/articles/{Uri.EscapeDataString permalink}"
 
 module MiniIcon =
     let github =
@@ -93,6 +140,53 @@ module MiniIcon =
     let close =
         raw """<svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>"""
 
+type DisclosureConfig =
+    { id: string
+      openSignal: string
+      triggerLabel: string
+      rootClass: string
+      triggerClass: string
+      triggerContent: HtmlElement
+      panelLabel: string
+      panelClass: string
+      panelContent: HtmlElement list }
+
+module Disclosure =
+    let panel (config:DisclosureConfig) =
+        let buttonId = config.id + "-button"
+        let panelId = config.id + "-panel"
+        let escapeExpression =
+            $"evt.key == 'Escape' && ${config.openSignal} && ((${config.openSignal} = false), document.getElementById('{buttonId}').focus(), true)"
+
+        div {
+            _class config.rootClass
+            _data ("disclosure-root", "")
+            _data ("signals", $"{{ {config.openSignal}: false }}")
+            _data ("on:keydown__window", escapeExpression)
+            button {
+                _id buttonId
+                _type "button"
+                _ariaLabel config.triggerLabel
+                _attr ("aria-controls", panelId)
+                _data ("disclosure-button", "")
+                _data ("attr:aria-expanded", $"${config.openSignal} ? 'true' : 'false'")
+                _data ("on:click__stop", $"${config.openSignal} = !${config.openSignal}")
+                _class config.triggerClass
+                config.triggerContent
+            }
+            div {
+                _id panelId
+                _role "group"
+                _ariaLabel config.panelLabel
+                _data ("disclosure-panel", "")
+                _data ("show", $"${config.openSignal}")
+                _data ("on:click__outside", $"${config.openSignal} = false")
+                _style "display:none"
+                _class config.panelClass
+                for item in config.panelContent do item
+            }
+        }
+
 module ArticleCard =
     let private tag (text:string) =
         span {
@@ -100,10 +194,15 @@ module ArticleCard =
             text
         }
 
+    let tags (tags:string[]) =
+        div {
+            _class "flex flex-wrap gap-2"
+            for tag' in tags do tag tag'
+        }
+
     let summary (article':Article) =
-        let url = $"/articles/{article'.permalink}"
+        let url = SiteUrl.article article'.permalink
         article {
-            _id article'.permalink
             _class "py-6 border-b border-gray-300/60 dark:border-gray-700/60"
             div {
                 _class "flex items-center flex-wrap gap-x-4 gap-y-1 text-sm text-gray-400 dark:text-gray-500"
@@ -127,8 +226,8 @@ module ArticleCard =
             }
             p { _class "mt-2 text-base text-gray-600 dark:text-gray-400"; article'.summary }
             div {
-                _class "mt-4 flex flex-wrap gap-2"
-                for t in article'.tags do tag t
+                _class "mt-4"
+                tags article'.tags
             }
         }
 
@@ -146,8 +245,7 @@ module Footer =
             div {
                 _class "text-sm flex flex-col space-y-1"
                 a { _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", "@get('/articles')"); "Articles" }
-                a { _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", "@get('/services')"); "Services" }
-                a { _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", "@get('/projects')"); "Projects" }
+                a { _href "https://meiermade.com"; _class "whitespace-nowrap underline hover:text-emerald-600 dark:hover:text-emerald-400"; "Meier Made" }
             }
         }
 
@@ -171,98 +269,73 @@ module TopNav =
         }
 
     let private mobileItem (id:string, label:string, href:string) =
-        button {
+        a {
             _id $"{id}-mobile"
-            _type "button"
-            _class "block w-full text-left px-4 py-2 text-sm cursor-pointer hover:bg-gray-100 hover:text-emerald-600 dark:hover:bg-gray-700/50 dark:hover:text-emerald-400"
+            _href href
+            _class "block w-full cursor-pointer px-4 py-2 text-left text-sm transition hover:bg-gray-100 hover:text-emerald-600 focus:bg-gray-100 focus:text-emerald-600 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:hover:bg-gray-700/50 dark:hover:text-emerald-400 dark:focus:bg-gray-700/50 dark:focus:text-emerald-400 dark:focus-visible:outline-emerald-400"
             _dataClass ("text-emerald-600", $"$selectedNav == '{id}'")
             _dataClass ("dark:text-emerald-400", $"$selectedNav == '{id}'")
             _dataClass ("font-semibold", $"$selectedNav == '{id}'")
             _dataClass ("text-gray-700", $"$selectedNav != '{id}'")
             _dataClass ("dark:text-gray-300", $"$selectedNav != '{id}'")
-            _dataOn ("click", $"@get('{href}')")
+            _dataOn ("click__prevent", $"@get('{href}')")
+            text label
+        }
+
+    let private companyLink (className:string) =
+        a {
+            _href "https://meiermade.com"
+            _class className
+            text "Meier Made"
+        }
+
+    let private themeItem (value:string) (label:string) (icon:HtmlElement) =
+        button {
+            _type "button"
+            _class "flex w-full items-center gap-2 px-4 py-2 text-sm transition hover:bg-gray-100 focus:bg-gray-100 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:hover:bg-gray-700/50 dark:focus:bg-gray-700/50 dark:focus-visible:outline-emerald-400"
+            _dataClass ("text-emerald-600", $"$theme == '{value}'")
+            _dataClass ("dark:text-emerald-400", $"$theme == '{value}'")
+            _dataClass ("font-semibold", $"$theme == '{value}'")
+            _dataClass ("text-gray-700", $"$theme != '{value}'")
+            _dataClass ("dark:text-gray-300", $"$theme != '{value}'")
+            _dataOn ("click", $"$theme = '{value}'; $themeOpen = false; setTheme('{value}'); document.getElementById('theme-button').focus()")
+            icon
             text label
         }
 
     let private themeToggle =
-        elDropdown {
-            _class "relative inline-block text-left"
-            button {
-                _id "theme-toggle"
-                _type "button"
-                _class [
-                    "inline-flex w-full items-center justify-center rounded-md p-2 text-gray-600 hover:text-emerald-600 hover:bg-gray-100"
-                    "dark:text-gray-400 dark:hover:text-emerald-400 dark:hover:bg-gray-800"
-                    "hover:cursor-pointer"
-                ]
-                MiniIcon.sun
-                MiniIcon.moon
-            }
-            elMenu {
-                _popover
-                _anchor "bottom end"
-                _class "mt-2 w-36 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
-                button {
-                    _type "button"
-                    _class "flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700/50"
-                    _dataClass ("text-emerald-600", "$theme == 'light'")
-                    _dataClass ("dark:text-emerald-400", "$theme == 'light'")
-                    _dataClass ("font-semibold", "$theme == 'light'")
-                    _dataClass ("text-gray-700", "$theme != 'light'")
-                    _dataClass ("dark:text-gray-300", "$theme != 'light'")
-                    _dataOn ("click", "$theme = 'light'; setTheme('light')")
-                    MiniIcon.sunSmall
-                    text "Light"
-                }
-                button {
-                    _type "button"
-                    _class "flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700/50"
-                    _dataClass ("text-emerald-600", "$theme == 'dark'")
-                    _dataClass ("dark:text-emerald-400", "$theme == 'dark'")
-                    _dataClass ("font-semibold", "$theme == 'dark'")
-                    _dataClass ("text-gray-700", "$theme != 'dark'")
-                    _dataClass ("dark:text-gray-300", "$theme != 'dark'")
-                    _dataOn ("click", "$theme = 'dark'; setTheme('dark')")
-                    MiniIcon.moonSmall
-                    text "Dark"
-                }
-                button {
-                    _type "button"
-                    _class "flex w-full items-center gap-2 px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700/50"
-                    _dataClass ("text-emerald-600", "$theme == 'system'")
-                    _dataClass ("dark:text-emerald-400", "$theme == 'system'")
-                    _dataClass ("font-semibold", "$theme == 'system'")
-                    _dataClass ("text-gray-700", "$theme != 'system'")
-                    _dataClass ("dark:text-gray-300", "$theme != 'system'")
-                    _dataOn ("click", "$theme = 'system'; setTheme('system')")
-                    MiniIcon.monitor
-                    text "System"
-                }
-            }
+        Disclosure.panel {
+            id = "theme"
+            openSignal = "themeOpen"
+            triggerLabel = "Choose theme"
+            rootClass = "relative inline-block text-left"
+            triggerClass = "inline-flex w-full items-center justify-center rounded-md p-2 text-gray-600 hover:cursor-pointer hover:bg-gray-100 hover:text-emerald-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-emerald-400 dark:focus-visible:outline-emerald-400"
+            triggerContent = span { _class "contents"; MiniIcon.sun; MiniIcon.moon }
+            panelLabel = "Theme"
+            panelClass = "absolute right-0 top-full z-40 mt-2 w-36 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
+            panelContent =
+                [ themeItem "light" "Light" MiniIcon.sunSmall
+                  themeItem "dark" "Dark" MiniIcon.moonSmall
+                  themeItem "system" "System" MiniIcon.monitor ]
         }
 
     let private mobileDropdown =
-        elDropdown {
-            _class "relative inline-block text-left md:hidden"
-            button {
-                _id "menu-toggle"
-                _type "button"
-                _class [
-                    "inline-flex w-full items-center justify-center rounded-md p-2 text-gray-600 hover:text-emerald-600 hover:bg-gray-100"
-                    "dark:text-gray-400 dark:hover:text-emerald-400 dark:hover:bg-gray-800"
-                    "hover:cursor-pointer"
-                ]
-                MiniIcon.hamburger
-            }
-            elMenu {
-                _id "mobile-menu"
-                _popover
-                _anchor "bottom end"
-                _class "mt-2 w-56 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
-                mobileItem("nav-articles", "Articles", "/articles")
-                mobileItem("nav-projects", "Projects", "/projects")
-                mobileItem("nav-services", "Services", "/services")
-            }
+        Disclosure.panel {
+            id = "navigation"
+            openSignal = "navigationOpen"
+            triggerLabel = "Open navigation"
+            rootClass = "relative inline-block text-left md:hidden"
+            triggerClass = "inline-flex w-full items-center justify-center rounded-md p-2 text-gray-600 hover:cursor-pointer hover:bg-gray-100 hover:text-emerald-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-emerald-400 dark:focus-visible:outline-emerald-400"
+            triggerContent = span { _class "contents"; MiniIcon.hamburger }
+            panelLabel = "Navigation"
+            panelClass = "absolute right-0 top-full z-40 mt-2 w-56 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/10"
+            panelContent =
+                [ mobileItem("nav-articles", "Articles", "/articles")
+                  a {
+                      _href "https://meiermade.com"
+                      _class "block w-full px-4 py-2 text-left text-sm text-gray-700 transition hover:bg-gray-100 hover:text-emerald-600 focus:bg-gray-100 focus:text-emerald-600 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-emerald-600 dark:text-gray-300 dark:hover:bg-gray-700/50 dark:hover:text-emerald-400 dark:focus:bg-gray-700/50 dark:focus:text-emerald-400 dark:focus-visible:outline-emerald-400"
+                      "Meier Made"
+                  } ]
         }
 
     let primary =
@@ -278,8 +351,7 @@ module TopNav =
                 div {
                     _class "hidden md:flex items-center gap-4"
                     item("nav-articles", text "Articles", "/articles")
-                    item("nav-projects", text "Projects", "/projects")
-                    item("nav-services", text "Services", "/services")
+                    companyLink "p-2 text-sm font-semibold text-gray-800 hover:text-emerald-600 dark:text-gray-200 dark:hover:text-emerald-400"
                 }
                 themeToggle
                 mobileDropdown
@@ -305,7 +377,6 @@ type Document =
                 }
                 link { _href (Asset.fingerprinted "/css/compiled.css"); _rel "stylesheet" }
                 link { _href (Asset.fingerprinted "/css/prism.css"); _rel "stylesheet" }
-                script { _type "module"; _src (Asset.fingerprinted "/scripts/tailwindplus-elements.1.js") }
                 script { _type "module"; _src (Asset.fingerprinted "/scripts/datastar.1.0.0-RC.6.js") }
             }
             body {
@@ -319,35 +390,36 @@ type Document =
                 }
                 div {
                     _id "cookie-consent-banner"
-                    _class "hidden fixed inset-x-0 bottom-0 z-50 border-t border-gray-300 bg-white/95 p-4 shadow-2xl backdrop-blur dark:border-gray-700 dark:bg-gray-900/95"
                     _role "dialog"
+                    _ariaLabelledby "analytics-consent-title"
+                    _ariaDescribedby "analytics-consent-description"
                     _ariaLive "polite"
+                    _class "pointer-events-none fixed inset-x-0 bottom-0 z-50 hidden px-4 pb-4 sm:px-6 sm:pb-6"
                     div {
-                        _class "mx-auto flex max-w-5xl flex-col gap-4 md:flex-row md:items-center md:justify-between"
-                        div {
-                            _class "max-w-3xl"
-                            p {
-                                _class "text-sm font-semibold text-gray-900 dark:text-gray-100"
-                                "Analytics cookies"
-                            }
-                            p {
-                                _class "mt-1 text-sm text-gray-600 dark:text-gray-300"
-                                "I use analytics to measure how this site is used. You can accept or reject analytics cookies, and the site will work either way."
-                            }
+                        _class "pointer-events-auto ml-auto max-w-xl rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl shadow-gray-950/15 sm:p-6 dark:border-gray-700 dark:bg-gray-900 dark:shadow-black/30"
+                        h2 {
+                            _id "analytics-consent-title"
+                            _class "text-base font-semibold text-gray-950 dark:text-gray-50"
+                            "Optional analytics"
+                        }
+                        p {
+                            _id "analytics-consent-description"
+                            _class "mt-2 text-sm/6 text-gray-600 dark:text-gray-300"
+                            "Google Analytics and Snowplow are loaded only if you accept. They help me understand site usage; declining does not affect the site."
                         }
                         div {
-                            _class "flex flex-col gap-2 sm:flex-row"
+                            _class "mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
                             button {
                                 _type "button"
-                                _class "inline-flex items-center justify-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:cursor-pointer dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+                                _class "rounded-full border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800"
                                 _onclick "setAnalyticsConsent('declined')"
-                                "Reject"
+                                "Decline"
                             }
                             button {
                                 _type "button"
-                                _class "inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 hover:cursor-pointer dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                                _class "rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:hover:bg-emerald-400"
                                 _onclick "setAnalyticsConsent('accepted')"
-                                "Accept"
+                                "Accept analytics"
                             }
                         }
                     }

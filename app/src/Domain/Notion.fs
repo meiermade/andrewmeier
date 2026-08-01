@@ -46,12 +46,14 @@ module Cursor =
 
 type Config =
     { articlesDatabaseId:DatabaseId
-      apiKey:string }
+      apiKey:string
+      baseUrl:string }
 
 module Config =
     let load () =
         { articlesDatabaseId = Env.variable "NOTION_ARTICLES_DATABASE_ID" |> DatabaseId.ofString
-          apiKey = Env.variable "NOTION_API_KEY" }
+          apiKey = Env.variable "NOTION_API_KEY"
+          baseUrl = Env.variableOrDefault "NOTION_BASE_URL" "https://api.notion.com/v1" }
 
 // ============================================================
 // Types
@@ -354,8 +356,8 @@ module Page =
 [<Literal>]
 let private NotionApiVersion = "2022-06-28"
 
-[<Literal>]
-let private BaseUrl = "https://api.notion.com/v1"
+let private apiUrl (config:Config) (path:string) =
+    config.baseUrl.TrimEnd('/') + path
 
 let private createRequest (config: Config) (method: HttpMethod) (url: string) =
     let req = new HttpRequestMessage(method, url)
@@ -404,7 +406,7 @@ module Service =
                 let dbId = DatabaseId.toString databaseId
                 use span = telemetry.startActiveSpan "domain.notion.query_database"
                 span.SetAttribute("database_id", dbId) |> ignore
-                let url = $"{BaseUrl}/databases/{dbId}/query"
+                let url = apiUrl config $"/databases/{dbId}/query"
                 let req = createRequest config HttpMethod.Post url
 
                 let body = dict [
@@ -433,7 +435,7 @@ module Service =
                 let pgId = PageId.toString pageId
                 use span = telemetry.startActiveSpan "domain.notion.retrieve_page"
                 span.SetAttribute("page_id", pgId) |> ignore
-                let url = $"{BaseUrl}/pages/{pgId}"
+                let url = apiUrl config $"/pages/{pgId}"
                 let req = createRequest config HttpMethod.Get url
                 let! resp = httpClient.SendAsync(req)
                 resp.EnsureSuccessStatusCode() |> ignore
@@ -453,7 +455,7 @@ module Service =
                 use span = telemetry.startActiveSpan "domain.notion.retrieve_block_children"
                 span.SetAttribute("block_id", blkId) |> ignore
 
-                let mutable url = $"{BaseUrl}/blocks/{blkId}/children?page_size=100"
+                let mutable url = apiUrl config $"/blocks/{blkId}/children?page_size=100"
 
                 match startCursor with
                 | Some c -> url <- url + $"&start_cursor={Cursor.toString c}"

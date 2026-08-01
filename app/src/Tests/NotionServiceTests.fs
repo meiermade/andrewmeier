@@ -55,7 +55,8 @@ let private mockHttpClient (responses: (string * string) list) =
 
 let private testConfig: Config =
     { articlesDatabaseId = DatabaseId.ofString "articles-db"
-      apiKey = "test-token" }
+      apiKey = "test-token"
+      baseUrl = "http://notion.test/v1" }
 
 let private noopTelemetry: Telemetry.Service =
     { startActiveSpan =
@@ -73,6 +74,27 @@ let private noopTelemetry: Telemetry.Service =
 
 let queryDatabaseTests =
     testList "Service.queryDatabase" [
+        testTask "uses the configured endpoint and Notion request headers" {
+            let mutable request: HttpRequestMessage option = None
+            let handler =
+                new MockHandler(fun req ->
+                    request <- Some req
+                    new HttpResponseMessage(
+                        HttpStatusCode.OK,
+                        Content = new StringContent("""{"results":[],"has_more":false,"next_cursor":null}""", Encoding.UTF8, "application/json")
+                    ))
+            let httpClient = new HttpClient(handler)
+            let svc = Service.create testConfig noopTelemetry httpClient
+
+            let! _ = svc.queryDatabase testConfig.articlesDatabaseId { filter = None; startCursor = None }
+
+            let request = request |> Option.defaultWith (fun () -> failtest "Expected a Notion request")
+            Expect.equal request.RequestUri.AbsoluteUri "http://notion.test/v1/databases/articles-db/query" "Expected configured Notion base URL"
+            Expect.equal request.Headers.Authorization.Scheme "Bearer" "Expected bearer authentication"
+            Expect.equal request.Headers.Authorization.Parameter "test-token" "Expected configured API key"
+            Expect.equal (request.Headers.GetValues("Notion-Version") |> Seq.exactlyOne) "2022-06-28" "Expected Notion API version"
+        }
+
         testTask "returns parsed pages" {
             let responseJson =
                 $"""{{

@@ -28,7 +28,7 @@ let handler (services:Services) : HttpHandler =
     choose [
         route "/health" >=> GET >=> text "Healthy"
         routex "(/?)" >=> GET >=> getHomePage services
-        App.Services.Handler.handler services
-        App.Projects.Handler.handler services
+        route "/services" >=> GET >=> redirectTo true "https://meiermade.com/services"
+        route "/projects" >=> GET >=> redirectTo true "https://meiermade.com/projects"
         subRoute "/articles" (App.Articles.Handler.handler services)
     ]
