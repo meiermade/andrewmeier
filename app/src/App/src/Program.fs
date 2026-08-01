@@ -42,7 +42,7 @@ let configureLogger (config: Config) =
             .WriteTo.OpenTelemetry(fun opts ->
                 opts.Endpoint <- config.seq.endpoint + "/ingest/otlp/v1/logs"
                 opts.Protocol <- OtlpProtocol.HttpProtobuf
-                opts.ResourceAttributes <- dict [ "service.name", box config.appName ])
+                opts.ResourceAttributes.Add("service.name", box config.appName))
             .CreateLogger()
 
     Log.Logger <- logger

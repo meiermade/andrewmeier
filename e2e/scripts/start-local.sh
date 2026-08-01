@@ -52,6 +52,8 @@ GOOGLE_ANALYTICS_MEASUREMENT_ID=G-LOCAL \
 NOTION_API_KEY=mock-notion-token \
 NOTION_ARTICLES_DATABASE_ID=mock-articles \
 NOTION_BASE_URL="http://127.0.0.1:${mock_port}/v1" \
+OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=e2e" \
+OTEL_SERVICE_NAME="andymeier-e2e" \
 SEQ_ENDPOINT="http://127.0.0.1:5341" \
 SERVER_URL="http://127.0.0.1:${server_port}" \
 SQLITE_PATH="$sqlite_path" \
