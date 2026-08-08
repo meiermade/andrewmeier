@@ -2,7 +2,7 @@
 
 This repository includes browser assets from the following projects.
 
-## Datastar 1.0.0-RC.6
+## Datastar 1.0.2
 
 Source: https://github.com/starfederation/datastar
 

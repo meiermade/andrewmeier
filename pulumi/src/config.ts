@@ -17,7 +17,7 @@ const rawCloudflareConfig = new pulumi.Config('cloudflare')
 export const cloudflareConfig = {
     accountId: rawCloudflareConfig.require('accountId'),
     apiToken: rawCloudflareConfig.requireSecret('apiToken'),
-    cloudflaredVersion: '2026.2.0'
+    cloudflaredVersion: '2026.7.3'
 }
 
 const rawK8sConfig = new pulumi.Config('k8s')

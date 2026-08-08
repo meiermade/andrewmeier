@@ -141,15 +141,15 @@ let tests =
                 Expect.isFalse (unsafeHtml.Contains "onclick=") "Expected Notion content not to create an event attribute"
             }
 
-            test "restricts image and background URLs to encoded HTTP resources" {
+            test "restricts image and background URLs to escaped HTTP resources" {
                 let safeImage = SafeOutput.tryImageAttribute "https://example.com/image.png?a=1&b=2"
                 let unsafeImage = SafeOutput.tryImageAttribute "javascript:alert(1)"
                 let background = SafeOutput.tryBackgroundImageStyle "https://example.com/image.png?value=')"
 
-                Expect.equal safeImage (Some "https://example.com/image.png?a=1&amp;b=2") "Expected an encoded HTTPS image URL"
+                Expect.equal safeImage (Some "https://example.com/image.png?a=1&b=2") "Expected an escaped HTTPS image URL"
                 Expect.isNone unsafeImage "Expected an unsafe image URL scheme to be rejected"
                 Expect.isSome background "Expected an HTTPS background image"
-                Expect.isFalse (background.Value.Contains "')") "Expected CSS delimiters to be encoded"
+                Expect.isFalse (background.Value.Contains "value=')") "Expected untrusted CSS delimiters to be encoded"
                 Expect.stringContains background.Value "%27%29" "Expected quote and parenthesis CSS characters to be encoded"
             }
 
@@ -233,7 +233,7 @@ let tests =
                 let html = Render.toHtmlDocString doc
 
                 Expect.stringContains html "<title>Andy Meier</title>" "Expected page to render"
-                Expect.stringContains html "selectedNav: 'nav-home'" "Expected nav signal to render"
+                Expect.stringContains html "selectedNav: &#39;nav-home&#39;" "Expected encoded nav signal to render"
                 Expect.stringContains html "cookie-consent-banner" "Expected consent banner"
                 Expect.stringContains html "analytics-consent-title" "Expected consent dialog title"
                 Expect.stringContains html "Optional analytics" "Expected Meier Made-style consent heading"

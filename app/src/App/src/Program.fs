@@ -52,9 +52,10 @@ let configureServices (serviceCollection: IServiceCollection) (tracerProvider: T
         .AddSerilog()
         .AddSingleton(tracerProvider)
         .AddHostedService(fun _ -> Article.SyncBackgroundService(services.article))
-        .AddDatastar()
-        .AddGiraffe()
     |> ignore
+
+    serviceCollection.AddDatastar() |> ignore
+    serviceCollection.AddGiraffe() |> ignore
 
 let private addSecurityHeaders (ctx:HttpContext) =
     ctx.Response.Headers["Content-Security-Policy"] <- "base-uri 'self'; frame-ancestors 'none'; object-src 'none'"
