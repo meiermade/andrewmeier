@@ -118,7 +118,7 @@ let articlesPage (state:ArticlesPageState) =
                     _action "/articles"
                     _class "border-b border-gray-300/60 py-4 dark:border-gray-700/60"
                     match filters.tag with
-                    | Some tag -> input { _type "hidden"; _name "tag"; _value (SafeOutput.attribute tag) }
+                    | Some tag -> input { _type "hidden"; _name "tag"; _value tag }
                     | None -> ()
                     match filters.publishedYear with
                     | Some year -> input { _type "hidden"; _name "year"; _value (string year) }
@@ -135,7 +135,7 @@ let articlesPage (state:ArticlesPageState) =
                                     _role "searchbox"
                                     _name "search"
                                     _ariaLabel "Search articles"
-                                    _value (filters.search |> Option.defaultValue "" |> SafeOutput.attribute)
+                                    _value (filters.search |> Option.defaultValue "")
                                     _placeholder "Search articles"
                                     _class searchInputClass
                                 }
@@ -285,7 +285,7 @@ module Block =
         | _ -> Other
 
     let rec toHtml (block:Domain.Notion.Block) : HtmlElement =
-        let cleanId = block.id.Replace("-", "") |> SafeOutput.attribute
+        let cleanId = block.id.Replace("-", "")
 
         match block.blockType with
         | Domain.Notion.BlockType.Heading1 richText ->
@@ -325,7 +325,7 @@ module Block =
                 | "JSON" -> "json"
                 | "TOML" -> "toml"
                 | other -> other
-            let languageClass = $"language-{language}" |> SafeOutput.attribute
+            let languageClass = $"language-{language}"
             pre {
                 _class languageClass
                 code {
