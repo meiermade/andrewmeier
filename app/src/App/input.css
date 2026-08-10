@@ -6,6 +6,7 @@
 
 /* Inline code: monospace fonts render larger at the same font-size,
    so scale down to visually match surrounding body text. */
-.prose :where(code):not(:where(pre *)) {
+.prose :not(pre) > code[class*="language-"] {
     font-size: 0.875em;
+    overflow-wrap: anywhere;
 }

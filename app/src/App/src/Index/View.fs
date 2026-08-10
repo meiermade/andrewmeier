@@ -2,7 +2,8 @@ module App.Index.View
 
 open FSharp.ViewEngine
 open App.Infrastructure
-open Domain.Article
+open App.Articles
+open App.Articles.Shared
 open App.Common.View
 open type Html
 open type Datastar

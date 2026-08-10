@@ -2,6 +2,7 @@ module App.Index.Handler
 
 open App.Infrastructure
 open App.ServiceRegistry
+open App.Articles
 open App.Common.Handler
 open App.Index.View
 open Giraffe
@@ -10,8 +11,7 @@ open StarFederation.Datastar.DependencyInjection
 let private getHomePage (services:Services) : HttpHandler =
     fun next ctx -> task {
         use _span = services.telemetry.startActiveSpan "app.index.get_home_page"
-        let! articles = services.article.listArticles ()
-        let recentArticles = articles |> List.truncate 3
+        let recentArticles = Catalog.all |> List.truncate 3
         let page = homePage recentArticles
 
         if ctx.IsDatastar then

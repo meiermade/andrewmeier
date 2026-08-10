@@ -1,6 +1,5 @@
 open App
 open App.ServiceRegistry
-open Domain
 open Giraffe
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
@@ -51,7 +50,6 @@ let configureServices (serviceCollection: IServiceCollection) (tracerProvider: T
     serviceCollection
         .AddSerilog()
         .AddSingleton(tracerProvider)
-        .AddHostedService(fun _ -> Article.SyncBackgroundService(services.article))
     |> ignore
 
     serviceCollection.AddDatastar() |> ignore

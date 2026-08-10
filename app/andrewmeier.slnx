@@ -2,8 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/App/App.fsproj" />
     <Project Path="src/Build/Build.fsproj" />
-    <Project Path="src/Domain/Domain.fsproj" />
-    <Project Path="src/MockNotion/MockNotion.fsproj" />
     <Project Path="src/Tests/Tests.fsproj" />
   </Folder>
 </Solution>

@@ -1,8 +1,15 @@
 import { expect, test } from '@playwright/test'
 
 const isRemote = process.env.E2E_START_LOCAL === '0'
+const testImage = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
 
 test.beforeEach(async ({ page }) => {
+  if (!isRemote) {
+    await page.route('https://assets.meiermade.com/andymeier/articles/**', route =>
+      route.fulfill({ contentType: 'image/png', body: testImage }),
+    )
+  }
+
   await page.addInitScript(() => localStorage.setItem('analytics-consent', 'declined'))
 })
 
@@ -18,43 +25,39 @@ test('homepage renders recent articles', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Recent articles', exact: true })).toBeVisible()
 })
 
-test('articles index renders and opens a published article when available', async ({ page }) => {
+test('articles index renders and opens a source-controlled article', async ({ page }) => {
   const response = await page.goto('/articles', { waitUntil: 'domcontentloaded' })
 
   expect(response?.status()).toBe(200)
   await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
 
-  const articleLinks = page.locator('#page a[href^="/articles/"]')
-  if (await articleLinks.count()) {
-    const href = await articleLinks.first().getAttribute('href')
-    expect(href).toBeTruthy()
-    const articleResponse = await page.goto(href!, { waitUntil: 'domcontentloaded' })
-    expect(articleResponse?.status()).toBe(200)
-    await expect(page.locator('article')).toBeVisible()
-  } else {
-    await expect(page.getByRole('heading', { name: 'No articles found', exact: true })).toBeVisible()
-  }
+  const articleResponse = await page.goto('/articles/fsharp-semantic-kernel', { waitUntil: 'domcontentloaded' })
+  expect(articleResponse?.status()).toBe(200)
+  await expect(page.locator('article')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
+  await expect(page.getByText('Microsoft’s Semantic Kernel SDK', { exact: false }).first()).toBeVisible()
 })
 
-test('local article search and detail routes use MockNotion fixtures', async ({ page }) => {
-  test.skip(isRemote, 'Published production content is not a deterministic fixture.')
-
-  await page.goto('/articles?search=engineering', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('heading', { name: 'Mock engineering notes', exact: true })).toBeVisible()
+test('article search, detail content, and GCS images are deterministic', async ({ page }) => {
+  await page.goto('/articles?search=semantic', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Clear search' })).toBeVisible()
 
-  const response = await page.goto('/articles/mock-finance-systems', { waitUntil: 'domcontentloaded' })
+  const response = await page.goto('/articles/personal-infrastructure', { waitUntil: 'domcontentloaded' })
   expect(response?.status()).toBe(200)
-  await expect(page.getByRole('heading', { name: 'Mock finance systems', exact: true }).first()).toBeVisible()
-  await expect(page.getByText('Finance', { exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Personal Infrastructure', exact: true }).first()).toBeVisible()
+  await expect(page.getByText('DevOps', { exact: true }).first()).toBeVisible()
+
+  const clusterImage = page.getByRole('img', { name: 'Three Raspberry Pi computers mounted in a home server rack' })
+  await expect(clusterImage).toHaveAttribute('src', /^https:\/\/assets\.meiermade\.com\/andymeier\/articles\//)
+  await expect.poll(() => clusterImage.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
 })
 
 test('article filter disclosures support native keyboard selection', async ({ page }) => {
-  test.skip(isRemote, 'Published production filters are not deterministic fixtures.')
-
   for (const filter of [
-    { name: 'tag', ariaLabel: 'Tag filter', value: 'Engineering' },
-    { name: 'year', ariaLabel: 'Published year filter', value: '2026' },
+    { name: 'tag', ariaLabel: 'Tag filter', value: '.NET' },
+    { name: 'year', ariaLabel: 'Published year filter', value: '2024' },
   ]) {
     await page.goto('/articles', { waitUntil: 'domcontentloaded' })
     await page.getByText('+ Add filter', { exact: true }).click()
@@ -69,6 +72,9 @@ test('article filter disclosures support native keyboard selection', async ({ pa
     await expect(panel).toBeVisible()
     await expect(button).toHaveAttribute('aria-expanded', 'true')
     await page.keyboard.press('Tab')
+    if (await panel.evaluate(element => element === document.activeElement)) {
+      await page.keyboard.press('Tab')
+    }
     await expect(option).toBeFocused()
 
     await page.keyboard.press('Escape')
@@ -78,6 +84,9 @@ test('article filter disclosures support native keyboard selection', async ({ pa
     await button.press('Space')
     await expect(panel).toBeVisible()
     await page.keyboard.press('Tab')
+    if (await panel.evaluate(element => element === document.activeElement)) {
+      await page.keyboard.press('Tab')
+    }
     await expect(option).toBeFocused()
     await page.keyboard.press('Enter')
 
@@ -131,5 +140,9 @@ test('articles remain usable at a mobile viewport', async ({ page }) => {
   await page.goto('/articles', { waitUntil: 'domcontentloaded' })
 
   await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  await page.goto('/articles/personal-infrastructure', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: 'Personal Infrastructure', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })

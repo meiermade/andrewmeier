@@ -7,10 +7,10 @@ Personal website for Andy Meier built with F#, Giraffe, Datastar, and Tailwind C
 ## Structure
 
 - `app/` - F# web application
-  - `src/App/` - Main application (Giraffe + Datastar)
+  - `src/App/` - Main application and FSharp.ViewEngine article source
   - `src/Build/` - FAKE build script
   - `src/Tests/` - Expecto tests
-- `pulumi/` - Infrastructure as code (GCP Artifact Registry, Cloudflare, Kubernetes)
+- `pulumi/` - Infrastructure as code (Cloudflare and Kubernetes)
 
 ## Development
 
@@ -21,7 +21,15 @@ dotnet paket restore
 ./fake.sh Watch
 ```
 
-`Watch` starts a local MockNotion service with fictional articles, so normal local development does not require Notion credentials or a Pulumi ESC environment.
+Articles are authored directly in `app/src/App/src/Articles/Posts` with FSharp.ViewEngine. `Watch` uses those source-controlled articles and requires no content-service credentials.
+
+## Publishing articles
+
+1. Add a post module under `app/src/App/src/Articles/Posts` and register it in `Articles/Catalog.fs`.
+2. Upload article images to `gs://assets.meiermade.com/andymeier/articles/<permalink>/` using content-hashed filenames.
+3. Reference each image's `https://assets.meiermade.com/andymeier/...` URL from the post.
+
+Article assets are manually published and cached, so changing an image requires a new filename.
 
 ## Testing
 

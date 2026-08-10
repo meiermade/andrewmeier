@@ -32,13 +32,6 @@ export const seqConfig = {
     endpoint: rawSeqConfig.require('endpoint')
 }
 
-const rawNotionConfig = new pulumi.Config('notion')
-
-export const notionConfig = {
-    articlesDatabaseId: rawNotionConfig.require('articlesDatabaseId'),
-    apiKey: rawNotionConfig.requireSecret('apiKey')
-}
-
 const rawGoogleAnalyticsConfig = new pulumi.Config('googleAnalytics')
 
 export const googleAnalyticsConfig = {

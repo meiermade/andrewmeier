@@ -1,24 +1,20 @@
 module ArticleFilterTests
 
+open App.Articles
 open App.Articles.Handler
-open Domain.Article
 open Expecto
+open FSharp.ViewEngine
 open System
+open type Html
 
-let private article title summary tags createdAt =
-    { id = title
-      permalink = title.ToLowerInvariant().Replace(" ", "-")
+let private article (title:string) (summary:string) (tags:string[]) (createdAt:DateTimeOffset) : Article =
+    { permalink = title.ToLowerInvariant().Replace(" ", "-")
       title = title
       summary = summary
-      icon = ""
-      iconDescription = ""
-      cover = ""
-      coverDescription = ""
+      cover = "https://assets.meiermade.com/andymeier/articles/shared/cover.webp"
       tags = tags
       createdAt = createdAt
-      updatedAt = createdAt
-      blocks = []
-      syncedAt = createdAt }
+      page = empty }
 
 let private articles =
     [ article "Finance systems" "Notes on dependable operations." [| "Finance"; "Architecture" |] (DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero))

@@ -1,5 +1,7 @@
 module ViewTests
 
+open App.Articles
+open App.Articles.Shared
 open App.Common.View
 open Expecto
 open FSharp.ViewEngine
@@ -100,20 +102,14 @@ let tests =
 
             test "does not let article permalinks escape attributes or Datastar expressions" {
                 let unsafePermalink = "\" onmouseover=\"alert(1)"
-                let article : Domain.Article.Article =
-                    { id = "article"
-                      permalink = unsafePermalink
+                let article : Article =
+                    { permalink = unsafePermalink
                       title = "Example article"
                       summary = "Summary"
-                      icon = ""
-                      iconDescription = ""
-                      cover = ""
-                      coverDescription = ""
+                      cover = "https://assets.meiermade.com/andymeier/articles/shared/cover.webp"
                       tags = [||]
                       createdAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero)
-                      updatedAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero)
-                      blocks = []
-                      syncedAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero) }
+                      page = empty }
 
                 let html = ArticleCard.summary article |> Render.toHtmlDocString
 
@@ -121,33 +117,11 @@ let tests =
                 Expect.stringContains html "/articles/%22%20onmouseover%3D%22alert%281%29" "Expected permalink to be encoded as one URL segment"
             }
 
-            test "allows safe Notion links without rendering unsafe URL schemes or attributes" {
-                let richText href : Domain.Notion.RichText =
-                    { plainText = "Example"
-                      href = Some href
-                      annotations =
-                        { bold = false
-                          italic = false
-                          strikethrough = false
-                          underline = false
-                          code = false
-                          color = "default" } }
-
-                let safeHtml = App.Articles.View.RichTextView.toHtml (richText "https://example.com/?a=1&b=2") |> Render.toHtmlDocString
-                let unsafeHtml = App.Articles.View.RichTextView.toHtml (richText "javascript:alert(1)\" onclick=\"alert(2)") |> Render.toHtmlDocString
-
-                Expect.stringContains safeHtml "href=\"https://example.com/?a=1&amp;b=2\"" "Expected a safe, encoded HTTPS link"
-                Expect.isFalse (unsafeHtml.Contains "<a") "Expected unsafe URL schemes to render as plain text"
-                Expect.isFalse (unsafeHtml.Contains "onclick=") "Expected Notion content not to create an event attribute"
-            }
-
-            test "restricts image and background URLs to escaped HTTP resources" {
-                let safeImage = SafeOutput.tryImageAttribute "https://example.com/image.png?a=1&b=2"
-                let unsafeImage = SafeOutput.tryImageAttribute "javascript:alert(1)"
+            test "restricts background images to escaped HTTP resources" {
                 let background = SafeOutput.tryBackgroundImageStyle "https://example.com/image.png?value=')"
+                let unsafeBackground = SafeOutput.tryBackgroundImageStyle "javascript:alert(1)"
 
-                Expect.equal safeImage (Some "https://example.com/image.png?a=1&b=2") "Expected an escaped HTTPS image URL"
-                Expect.isNone unsafeImage "Expected an unsafe image URL scheme to be rejected"
+                Expect.isNone unsafeBackground "Expected an unsafe image URL scheme to be rejected"
                 Expect.isSome background "Expected an HTTPS background image"
                 Expect.isFalse (background.Value.Contains "value=')") "Expected untrusted CSS delimiters to be encoded"
                 Expect.stringContains background.Value "%27%29" "Expected quote and parenthesis CSS characters to be encoded"
@@ -168,22 +142,15 @@ let tests =
             }
 
             test "shows article tags on the detail page" {
-                let article : Domain.Article.Article =
-                    { id = "article"
-                      permalink = "article"
+                let metadata : ArticleMetadata =
+                    { permalink = "article"
                       title = "Example article"
                       summary = "Summary"
-                      icon = ""
-                      iconDescription = ""
-                      cover = ""
-                      coverDescription = ""
+                      cover = "https://assets.meiermade.com/andymeier/articles/shared/cover.webp"
                       tags = [| "Engineering"; "Finance" |]
-                      createdAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero)
-                      updatedAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero)
-                      blocks = []
-                      syncedAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero) }
+                      createdAt = System.DateTimeOffset(2026, 2, 1, 0, 0, 0, System.TimeSpan.Zero) }
 
-                let html = App.Articles.View.articlePage article |> Render.toHtmlDocString
+                let html = ArticlePage.primary metadata [] |> Render.toHtmlDocString
 
                 Expect.stringContains html "Engineering" "Expected article tag on detail page"
                 Expect.stringContains html "Finance" "Expected article tag on detail page"
