@@ -9,1666 +9,394 @@ open type Html
 let private metadata =
     { permalink = "dev-env"
       title = "Development Environment"
-      summary = "How I set up my computer for development"
+      summary = "How I set up a Mac for agent-driven software development and infrastructure work"
       cover = "https://assets.meiermade.com/andymeier/articles/shared/gradient-purple-4776537cdf89.webp"
-      tags = [| "Programming"; "Python"; "F#"; ".NET"; "AI" |]
-      createdAt = DateTimeOffset(2020, 4, 4, 0, 0, 0, TimeSpan.Zero) }
+      tags = [| "Programming"; "AI"; "macOS"; "Python"; ".NET"; "Infrastructure" |]
+      createdAt = DateTimeOffset(2026, 8, 11, 0, 0, 0, TimeSpan.Zero) }
+
+let private heading id' label = h2 {
+    _class "mt-10 scroll-mt-24"
+    _id id'
+    text label
+}
+
+let private subheading id' label = h3 {
+    _class "mt-6 scroll-mt-24"
+    _id id'
+    text label
+}
+
+let private paragraph value = p { text value }
+
+let private inlineCode value = code {
+    _class "language-none"
+    text value
+}
+
+let private codeBlock language value = pre {
+    _class $"language-{language}"
+
+    code {
+        _class $"language-{language}"
+        span { text value }
+    }
+}
+
+let private link href label = a {
+    _href href
+    text label
+}
 
 let private content =
-    [ h3 {
-          _class "mt-6"
-          _id "a49afb67c49944c49874c3e568079409"
-          span { text "Table of Contents" }
+    [ p {
+          text
+              "This is the development environment I set up on a new Mac. The machine provides a dependable command-line foundation, each repository declares its own build and test dependencies, and the Pi coding agent is where I do almost all development. I use JetBrains IDEs to review and debug code and to work with databases."
+      }
+      p {
+          text
+              "I keep the global installation intentionally small. Tools that define the workstation belong in Homebrew; tools that define a project belong in that project's lock files and tool manifests. This makes the computer easy to recreate without letting global package versions silently change a build."
+      }
+      nav {
+          _ariaLabel "Table of contents"
+
+          h2 {
+              _class "mt-8"
+              text "Contents"
+          }
+
+          ul {
+              _class "list-disc"
+
+              for id', label in
+                  [ "computer", "Computer"
+                    "macos", "macOS and Homebrew"
+                    "terminal", "Terminal environment"
+                    "source-control", "Source control and credentials"
+                    "runtimes", "Language runtimes"
+                    "pi", "Pi coding agent"
+                    "ides", "JetBrains IDEs"
+                    "infrastructure", "Containers and infrastructure"
+                    "utilities", "Supporting command-line tools"
+                    "projects", "Repository-owned tools"
+                    "verify", "Verify the setup" ] do
+                  li {
+                      a {
+                          _href $"#{id'}"
+                          text label
+                      }
+                  }
+          }
+      }
+      heading "computer" "Computer"
+      paragraph
+          "I use a 14-inch MacBook Pro with an Apple M5 Max chip and 128 GB of memory. The memory is more important to me than maximizing any single benchmark: I regularly have several Pi sessions, JetBrains IDEs, Docker workloads, browser tests, and local application processes open at the same time."
+      paragraph
+          "I keep macOS current and enable FileVault during initial setup. I also sign in to the services I use for work before installing developer tools, particularly 1Password, GitHub, Google Cloud, and JetBrains Toolbox."
+      heading "macos" "macOS and Homebrew"
+      p {
+          text "I start by installing Apple's "
+          link "https://developer.apple.com/xcode/resources/" "Xcode Command Line Tools"
+          text ". They provide Git and the native build tools expected by many packages."
+      }
+      codeBlock "bash" "xcode-select --install"
+      p {
+          text "I use "
+          link "https://brew.sh/" "Homebrew"
+          text " for workstation-level packages. On Apple silicon, I add Homebrew to zsh after installation."
+      }
+      codeBlock
+          "bash"
+          "echo 'eval \"$(/opt/homebrew/bin/brew shellenv)\"' >> ~/.zprofile\neval \"$(/opt/homebrew/bin/brew shellenv)\""
+      paragraph "These formulae make up the core command-line environment:"
+      codeBlock
+          "bash"
+          "brew install cloudflared fnm gh googleworkspace-cli kubectx kubernetes-cli pulumi ripgrep starship tmux uv"
+      paragraph "I install the desktop applications and larger SDKs as casks:"
+      codeBlock
+          "bash"
+          "brew install --cask 1password-cli docker-desktop dotnet-sdk gcloud-cli ghostty jetbrains-toolbox"
+      paragraph
+          "I do not pin versions in this bootstrap list. Homebrew provides the workstation tools, while repositories pin the versions that can affect a build."
+      heading "terminal" "Terminal environment"
+      p {
+          text "I use "
+          link "https://ghostty.org/" "Ghostty"
+
+          text
+              " as my terminal. It is a native macOS application with tabs, splits, GPU-accelerated rendering, and support for the keyboard protocol Pi uses for modified key combinations."
+      }
+      p {
+          text "Pi recommends one Ghostty binding so "
+          inlineCode "Option+Backspace"
+          text " behaves consistently. I add it to "
+          inlineCode "~/Library/Application Support/com.mitchellh.ghostty/config"
+          text "."
+      }
+      codeBlock "ini" "keybind = alt+backspace=text:\\x1b\\x7f"
+      p {
+          text "macOS already uses zsh. I add "
+          link "https://starship.rs/" "Starship"
+          text " for a compact prompt and initialize both Starship and fnm from "
+          inlineCode "~/.zshrc"
+          text "."
+      }
+      codeBlock "bash" "eval \"$(fnm env --use-on-cd --shell zsh)\"\neval \"$(starship init zsh)\""
+      p {
+          text "I use "
+          link "https://github.com/tmux/tmux" "tmux"
+
+          text
+              " for application watchers, local servers, tunnels, and any other process that should keep running while Pi continues working. A named session is easy to inspect, reattach, or stop."
+      }
+      codeBlock "bash" "tmux new-session -s app\ntmux attach-session -t app"
+      heading "source-control" "Source control and credentials"
+      p {
+          text "The Xcode Command Line Tools install Git. I configure my identity and use "
+          link "https://cli.github.com/" "GitHub CLI"
+          text " for authentication, repositories, issues, pull requests, checks, and releases."
+      }
+      codeBlock
+          "bash"
+          "git config --global user.name \"Your Name\"\ngit config --global user.email \"you@example.com\"\ngit config --global init.defaultBranch main\ngh auth login\ngh auth setup-git"
+      p {
+          text "The "
+          link "https://developer.1password.com/docs/cli/" "1Password CLI"
+
+          text
+              " is a core part of the environment rather than an occasional utility. Pi skills use it to inject credentials into short-lived processes, which keeps secrets out of shell history, repositories, and ad hoc environment files."
+      }
+      codeBlock "bash" "op signin\nop vault list"
+      paragraph
+          "I authenticate service CLIs interactively on the workstation. Workloads and CI use workload identity, service accounts, or repository secrets rather than copying my personal credentials."
+      heading "runtimes" "Language runtimes"
+      paragraph
+          "I install runtime managers globally, but let each repository declare the runtime and dependency versions it needs. My primary stacks are TypeScript and JavaScript, Python, and F#/.NET."
+      subheading "node" "Node.js"
+      p {
+          text "I use "
+          link "https://github.com/Schniz/fnm" "fnm"
+          text " to install and switch Node.js versions. npm ships with Node.js and is also how I install Pi."
+      }
+      codeBlock "bash" "fnm install --lts\nnode --version\nnpm --version"
+      paragraph
+          "Projects commit their package manifest and lock file. I normally use npm ci for an existing repository so the installed dependency graph matches the lock file exactly."
+      subheading "python" "Python and uv"
+      p {
+          text "I use "
+          link "https://docs.astral.sh/uv/" "uv"
+
+          text
+              " for Python versions, virtual environments, project dependencies, lock files, scripts, and Python command-line tools. I do not manage a separate pyenv, pip, virtualenv, Poetry, or pipx setup."
+      }
+      codeBlock "bash" "uv python install\nuv init\nuv add requests\nuv add --dev pytest\nuv sync\nuv run pytest"
+      p {
+          text "For an existing project, "
+          inlineCode "uv sync"
+          text " restores the environment and "
+          inlineCode "uv run"
+
+          text
+              " runs Python or a project command inside it. Keeping every Python invocation behind uv makes the selected interpreter and dependency environment explicit."
+      }
+      subheading "dotnet" ".NET and F#"
+      p {
+          text "The "
+          link "https://dotnet.microsoft.com/download" ".NET SDK"
+
+          text
+              " provides the compiler, runtime, templates, test runner, and F# Interactive. Most of my application work in .NET is written in F#."
+      }
+      codeBlock "bash" "dotnet --info\ndotnet tool restore\ndotnet test"
+      paragraph
+          "Repositories restore Paket, FAKE, Fantomas, and other .NET tools through checked-in manifests or build scripts. I avoid installing project build tools globally."
+      heading "pi" "Pi coding agent"
+      p {
+          text "The "
+          link "https://pi.dev/" "Pi coding agent"
+
+          text
+              " is my primary development environment. Pi is a terminal coding harness that gives the model repository context and tools for reading, editing, running commands, and verifying the result. Its small core can be extended with AGENTS.md files, skills, prompt templates, extensions, and packages."
+      }
+      paragraph "After Node.js is available, I install Pi globally and start it from the repository I want to work in."
+      codeBlock "bash" "npm install -g --ignore-scripts @earendil-works/pi-coding-agent\ncd ~/repos/example\npi"
+      p {
+          text "Inside Pi I run "
+          inlineCode "/login"
+
+          text
+              " and select the OpenAI Codex subscription provider for my ChatGPT Pro account. I use the model selector when I want to change models and keep high reasoning as my normal default."
+      }
+      codeBlock
+          "json"
+          "{\n  \"defaultProvider\": \"openai-codex\",\n  \"defaultModel\": \"gpt-5.6-sol\",\n  \"defaultThinkingLevel\": \"high\",\n  \"theme\": \"dark\",\n  \"enableInstallTelemetry\": false\n}"
+      p {
+          text "The global settings file lives at "
+          inlineCode "~/.pi/agent/settings.json"
+
+          text
+              ". Pi stores sessions by working directory, so I can resume a repository's previous work instead of rebuilding all context from scratch. Long sessions compact automatically while preserving the full JSONL history."
+      }
+      subheading "pi-context" "Instructions, skills, and packages"
+      p {
+          text "I keep global operating rules in "
+          inlineCode "~/.pi/agent/AGENTS.md"
+          text " and repository-specific rules in each repository's "
+          inlineCode "AGENTS.md"
+
+          text
+              ". These files tell Pi how the project is structured, which package manager to use, how to run tests, and which deployment operations are safe."
+      }
+      paragraph
+          "I also load a private skills package plus small packages for image generation and client context. Skills add repeatable workflows for GitHub, Google Cloud, Google Workspace, 1Password, Notion, browser testing, documents, infrastructure, and other services without placing every instruction in every prompt. Pi only loads a skill's full instructions when the task needs it."
+      p {
+          text
+              "I review package source before installing it because Pi packages and skills can direct tools with full user permissions. "
+
+          link
+              "https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/packages.md"
+              "Pi's package documentation"
+
+          text " describes the trust and installation model."
+      }
+      subheading "pi-workflow" "Daily workflow"
+      paragraph
+          "I do essentially all development through Pi. I start it in a repository, describe the outcome I want, and discuss the approach first when the work has meaningful design or operational tradeoffs. Pi inspects the repository, makes the changes, runs the relevant tests, and verifies the resulting application or artifact."
+      paragraph
+          "I steer the session as new information appears rather than waiting for a large batch of work to finish. For user-facing changes, Pi runs Playwright and captures rendered evidence. For infrastructure work, it previews changes and leaves deployment to the repository's established CI workflow. Git and GitHub CLI keep the branch, commit, pull request, and checks visible throughout the process."
+      heading "ides" "JetBrains IDEs"
+      p {
+          text "I install "
+          link "https://www.jetbrains.com/toolbox-app/" "JetBrains Toolbox"
+          text " and use it to manage three IDEs:"
       }
       ul {
           _class "list-disc"
 
           li {
-              a {
-                  _href "#c51d078bdf6a4feeb1194e5f8aa0d710"
-                  span { text "Computer" }
-              }
-
-              span { text ": Recommended specs for computer." }
+              strong { text "PyCharm" }
+              text " for Python and data projects."
           }
 
           li {
-              a {
-                  _href "#17286da7f6d34a11a97c81678ecee5f6"
-                  span { text "Dropbox" }
-              }
-
-              span { text ":  File storage." }
+              strong { text "Rider" }
+              text " for F#, .NET, and mixed .NET/web solutions."
           }
 
           li {
-              a {
-                  _href "#e5da454cee68425fbd9bf06fd8abe011"
-                  span { text "Windows Terminal" }
-              }
-
-              span { text ": Terminal for Windows." }
-          }
-
-          li {
-              a {
-                  _href "#0f093452c51644acb4b1509e9ac1da0f"
-                  span { text "Windows Subsystem for Linux" }
-              }
-
-              span { text ": Run Linux on Windows." }
-          }
-
-          li {
-              a {
-                  _href "#b39403d15e5243889ccc920b6ce4211a"
-                  span { text "Scoop" }
-              }
-
-              span { text ": Package manager for Windows." }
-          }
-
-          li {
-              a {
-                  _href "#1bb350e0e0234eecb508cce2b94780c2"
-                  span { text "oh-my-posh" }
-              }
-
-              span { text ": Better terminal prompt." }
-          }
-
-          li {
-              a {
-                  _href "#f29adc05e09941fbb42cfd37caa8eb1d"
-                  span { text "Vim" }
-              }
-
-              span { text ": Text editor to speed up your typing." }
-          }
-
-          li {
-              a {
-                  _href "#0de016a3d94a491c944d9e014acf4f02"
-                  span { text "Vimium" }
-              }
-
-              span { text ": Google Chrome extension to speed up your Googling." }
-          }
-
-          li {
-              a {
-                  _href "#0fc2f8a2f2504da8b0185b0a80562d4e"
-                  span { text "Visual Studio Code" }
-              }
-
-              span { text ": IDE to speed up your development." }
-          }
-
-          li {
-              a {
-                  _href "#d53358bfb6774cf1b1a73d743c81162e"
-                  span { text "Git" }
-              }
-
-              span { text ": Version control for champs." }
-          }
-
-          li {
-              a {
-                  _href "#8788b21dfe394fb782765cf1e571d931"
-                  span { text "Docker" }
-              }
-
-              span { text ": Container management." }
-          }
-
-          li {
-              a {
-                  _href "#987a17e9957446638ea3d4b5cc8aadae"
-                  span { text "dotnet" }
-              }
-
-              span { text ": .NET Core CLI for building .NET applications." }
-          }
-
-          li {
-              a {
-                  _href "#a07c6ae342f94aca8894c237ecdc1388"
-                  span { text "Node" }
-              }
-
-              span { text ": A JavaScript runtime." }
-          }
-
-          li {
-              a {
-                  _href "#9440715cc7e740cea2f4bdab7d77b9af"
-                  span { text "Python" }
-              }
-
-              span { text ": Easy to read, learn, and use programming language." }
-          }
-
-          li {
-              a {
-                  _href "#dc8d7f26672e457b9f1d93c796f3c22c"
-                  span { text "kubectl" }
-              }
-
-              span { text ": Kubernetes CLI." }
-          }
-
-          li {
-              a {
-                  _href "#09e3cf5418074ca6aa8cee17a05913e2"
-                  span { text "kubectxwin" }
-              }
-
-              span { text ": CLI for configuring Kubernetes contexts." }
-          }
-
-          li {
-              a {
-                  _href "#8d6aae336cb64346a8596d6d328f63ff"
-                  span { text "kubenswin" }
-              }
-
-              span { text ": CLI for configuring Kubernetes namespaces." }
-          }
-
-          li {
-              a {
-                  _href "#574b57c6b7eb40e6876b7e784fbd12a5"
-                  span { text "Helm" }
-              }
-
-              span { text ": Package manager for Kubernetes." }
-          }
-
-          li {
-              a {
-                  _href "#25f686d21b1b4c198bd8815c22259c1f"
-                  span { text "Pulumi" }
-              }
-
-              span { text ": Infrastructure as code." }
-          }
-
-          li {
-              a {
-                  _href "#ef28796ed44c4f50a81aa6a9f053b00c"
-                  span { text "Lightshot" }
-              }
-
-              span { text ": Screen capture tool." }
-          }
-
-          li {
-              a {
-                  _href "#480356f622e441b1a1d8386ca7fffa97"
-                  span { text "ScreenToGif" }
-              }
-
-              span { text ": Screen capture tool, but GIFs." }
-          }
-
-          li {
-              a {
-                  _href "#eab0baa1fec84f048158239eac825d77"
-                  span { text "OBS Studio" }
-              }
-
-              span { text ": Screen recording tool." }
+              strong { text "WebStorm" }
+              text " for TypeScript, JavaScript, and frontend projects."
           }
       }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "6f29ab163e11464d9bf97f46915f281f"
-          span { text "Computer" }
+      paragraph
+          "I use these IDEs primarily to review the code Pi changed: navigating types and usages, inspecting diffs, running a debugger, and understanding an unfamiliar area of a repository. They complement the agent workflow rather than serving as the main place where I type code."
+      paragraph
+          "JetBrains also has the best database connection support of any IDE family I have tried. Its database explorer, query console, schema navigation, result viewer, and generated diagrams are a major reason I stay with the JetBrains ecosystem."
+      heading "infrastructure" "Containers and infrastructure"
+      p {
+          text "I use "
+          link "https://docs.docker.com/desktop/setup/install/mac-install/" "Docker Desktop"
+
+          text
+              " for local containers and Compose environments. I install the application globally, while repositories own their Dockerfiles, Compose files, and image versions."
       }
-      div { span { text "I use a MacBook Pro (M4 Max) with 64 GB of memory." } }
+      codeBlock "bash" "docker version\ndocker compose version\ndocker ps"
+      p {
+          text "The "
+          link "https://cloud.google.com/sdk/docs/install-sdk" "gcloud CLI"
+          text " handles Google Cloud authentication, configuration, diagnostics, and direct resource inspection."
+      }
+      codeBlock "bash" "gcloud auth login\ngcloud auth application-default login\ngcloud config list"
+      p {
+          text "For Kubernetes I use "
+          link "https://kubernetes.io/docs/reference/kubectl/" "kubectl"
+          text " with "
+          link "https://github.com/ahmetb/kubectx" "kubectx and kubens"
+
+          text
+              ". kubectx makes the active cluster explicit, while kubens switches the default namespace without repeatedly editing commands."
+      }
+      codeBlock "bash" "kubectl config get-contexts\nkubectx\nkubectx <context>\nkubens <namespace>\nkubectl get pods"
+      p {
+          text "I use "
+          link "https://www.pulumi.com/docs/iac/" "Pulumi"
+
+          text
+              " for infrastructure as code. Projects select fully qualified stacks and use previews to review the proposed resource changes. Deployment is normally performed by CI after merge rather than by running an update manually from the laptop."
+      }
+      codeBlock "bash" "pulumi login\npulumi stack select <organization>/<project>/<stack>\npulumi preview"
+      p {
+          text "I install "
+
+          link
+              "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/"
+              "cloudflared"
+
+          text
+              " for local and administrative Cloudflare Tunnel work. Tunnel configuration itself belongs with the infrastructure that owns it rather than in global shell configuration."
+      }
+      heading "utilities" "Supporting command-line tools"
+      p {
+          text "Pi works best when the shell has small, composable tools. "
+          link "https://github.com/BurntSushi/ripgrep" "ripgrep"
+          text " searches repositories, "
+          inlineCode "jq"
+          text " filters JSON returned by CLIs, and "
+          inlineCode "curl"
+
+          text
+              " is useful for health checks and direct HTTP diagnostics. macOS supplies jq and curl; I add ripgrep through Homebrew."
+      }
+      p {
+          text "I also install the "
+          link "https://github.com/googleworkspace/cli" "Google Workspace CLI"
+
+          text
+              " (gws). Pi uses it through dedicated skills to work with Gmail, Calendar, Drive, Docs, Sheets, and Slides. Interactive OAuth is enough for a personal workstation."
+      }
+      codeBlock "bash" "gws auth login\ngws drive files list --params '{\"pageSize\": 5}'"
+      p {
+          text "Browser testing is installed per repository with "
+          link "https://playwright.dev/" "Playwright"
+
+          text
+              ". Pi uses it for end-to-end tests, screenshots, responsive checks, and visual inspection. Keeping it in the project's package manifest ensures the tests and browser tooling move together."
+      }
+      codeBlock "bash" "npm ci\nnpx playwright install\nnpx playwright test"
+      heading "projects" "Repository-owned tools"
+      paragraph
+          "A new workstation should not require a hand-maintained global installation of every framework used by every repository. After cloning a project, I follow its AGENTS.md and README and let its package managers restore the rest."
       ul {
           _class "list-disc"
 
           li {
-              span {
-                  _class "font-bold"
-                  text "Memory"
-              }
-
-              span { text ": 64 GB" }
-          }
-
-          li {
-              span {
-                  _class "font-bold"
-                  text "Chip"
-              }
-
-              span { text ": Apple M4 Max" }
-          }
-
-          li {
-              span {
-                  _class "font-bold"
-                  text "Disk"
-              }
-
-              span { text ": 1 TB" }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "9e7a142ea9c24440bfce3ff77fffb24b"
-          span { text "Google Drive" }
-      }
-      div {
-          span {
               text
-                  "Google Drive is great for scanning documents. I keep a single ‘Documents’ folder with all my files and then just use search when I need to find something. I use the file name convention "
-          }
-
-          code {
-              _class "language-none"
-              text "YYYY-MM-DD Description"
-          }
-
-          span { text " so I can also look back historically. The mobile app scanner works really well." }
-      }
-      h4 {
-          _class "mt-4"
-          _id "6bfdde616b0f478eb33017bd267f17ce"
-          span { text "Installation" }
-      }
-      div {
-          span { text "Navigate to " }
-
-          a {
-              _href "https://www.google.com/drive/download/"
-              span { text "https://www.google.com/drive/download/" }
-          }
-
-          span { text " and install for your system." }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "e5da454cee68425fbd9bf06fd8abe011"
-          span { text "Windows Terminal" }
-      }
-      div { span { text "New terminal for Windows. Makes for a much better terminal experience." } }
-      h4 {
-          _class "mt-4"
-          _id "8a2814bb222d4ad38e0d4a076d84336e"
-          span { text "Installation" }
-      }
-      div { span { text "Open the Windows Store and search for ‘terminal’. Then click ‘Install’." } }
-      img {
-          _class "drop-shadow-xl rounded"
-          _src "https://assets.meiermade.com/andymeier/articles/dev-env/windows-terminal-e5d8e6f409da.webp"
-          _alt "Windows Terminal in Microsoft Store search results"
-          _attr ("loading", "lazy")
-          _attr ("width", "995")
-          _attr ("height", "692")
-      }
-      h4 {
-          _class "mt-4"
-          _id "2c580980a8364e4182ebc62ba35b29a0"
-          span { text "Resources" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://docs.microsoft.com/en-us/windows/terminal/"
-                  span { text "Windows Terminal Overview" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "0f093452c51644acb4b1509e9ac1da0f"
-          span { text "Windows Subsystem for Linux (WSL)" }
-      }
-      div { span { text "Run Linux on Windows." } }
-      h4 {
-          _class "mt-4"
-          _id "531e866e81ee4ce9a5ce775f6c47b765"
-          span { text "Installation" }
-      }
-      div { span { text "Open PowerShell and run" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "wsl --install" }
-          }
-      }
-      div { span { text "Install Ubuntu" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "wsl --install --distribution Ubuntu" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "c1f4bdd16d214044b30527c9e84c727a"
-          span { text "Usage" }
-      }
-      div {
-          span { text "Open " }
-
-          a {
-              _href "#e5da454cee68425fbd9bf06fd8abe011"
-              span { text "Windows Terminal" }
-          }
-
-          span { text " and open Ubuntu." }
-      }
-      img {
-          _class "drop-shadow-xl rounded"
-          _src "https://assets.meiermade.com/andymeier/articles/dev-env/wsl-ubuntu-8852344c5af9.webp"
-          _alt "Ubuntu 20.04 selected in the Windows Terminal profile menu"
-          _attr ("loading", "lazy")
-          _attr ("width", "758")
-          _attr ("height", "401")
-      }
-      h4 {
-          _class "mt-4"
-          _id "cdc0611d9ffa4b0e95771f7ca5e39f28"
-          span { text "References" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://docs.microsoft.com/en-us/windows/wsl/install-win10"
-                  span { text "Windows 10 Installation Guide" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "b39403d15e5243889ccc920b6ce4211a"
-          span { text "Scoop" }
-      }
-      div { span { text "Package manager for Windows." } }
-      h4 {
-          _class "mt-4"
-          _id "c70dea33136e423aa4c7c46bfca1bf5c"
-          span { text "Installation" }
-      }
-      div { span { text "Set the execution policy." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "Set-ExecutionPolicy RemoteSigned -s CurrentUser" }
-          }
-      }
-      div { span { text "Install scoop." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "iex (New-Object net.webclient).downloadstring('https://get.scoop.sh')" }
-          }
-      }
-      div { span { text "Install sudo." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "scoop install sudo" }
-          }
-      }
-      blockquote { span { text "This allows you to run a command as an ‘Administrator’." } }
-      div { span { text "Add extras and versions buckets." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "scoop bucket add extras\nscoop bucket add versions" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "7d874f6738f74e2b811c630d71e919ba"
-          span { text "Usage" }
-      }
-      div { span { text "Search for packages" } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "scoop search vim" }
-          }
-      }
-      div { span { text "Install a package" } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "scoop install vim" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "2bf9d412a11948a38c2805d855b82751"
-          span { text "References" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://github.com/lukesampson/scoop"
-                  span { text "Scoop GitHub" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "1bb350e0e0234eecb508cce2b94780c2"
-          span { text "oh-my-posh" }
-      }
-      div { span { text "Better prompt." } }
-      h4 {
-          _class "mt-4"
-          _id "51a14fb8b3b64a5e87cde0c750c070c0"
-          span { text "Installation" }
-      }
-      div { span { text "Install with Scoop." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-
-              span {
-                  text
-                      "scoop install https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/oh-my-posh.json"
-              }
-          }
-      }
-      div { span { text "Open your profile." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "vim $env:PROFILE" }
-          }
-      }
-      div { span { text "Add the following line to the top of your profile to use the ‘paradox’ theme." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-
-              span {
-                  text
-                      "Invoke-Expression (oh-my-posh --init --shell pwsh --config \"$(scoop prefix oh-my-posh)/themes/paradox.omp.json\")"
-              }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "ba2c895b61374cb7b08713ef45dfbac7"
-          span { text "References" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://ohmyposh.dev/"
-                  span { text "oh-my-posh" }
-              }
+                  "npm restores TypeScript, Tailwind CSS, Playwright, and other Node.js dependencies from the lock file."
           }
 
           li {
-              a {
-                  _href
-                      "https://www.hanselman.com/blog/HowToMakeAPrettyPromptInWindowsTerminalWithPowerlineNerdFontsCascadiaCodeWSLAndOhmyposh.aspx"
-
-                  span { text "How to Make A Pretty Prompt In Windows Terminal" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "f29adc05e09941fbb42cfd37caa8eb1d"
-          span { text "Vim" }
-      }
-      div {
-          span {
               text
-                  "Text editor to speed up your typing. It takes a little while to get used to but the persistence pays of in the long run."
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "bbecbcc3379e47e69e4dfff724bab516"
-          span { text "Installation" }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "scoop install vim" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "ba7e07790fbc40e9a83985bec35d39ba"
-          span { text "Usage" }
-      }
-      div { span { text "Open vim in current directory." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "vim ." }
-          }
-      }
-      div { span { text "Open a file in vim" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "vim ./my-file.txt" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "91c8a98fd7d04c5192b499e56e7a0846"
-          span { text "Resources" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://www.openvim.com/"
-                  span { text "Online Vim tutorial" }
-              }
+                  "uv restores Python, dbt, Dagster, notebook, test, lint, and formatting dependencies from pyproject.toml and uv.lock."
           }
 
           li {
-              a {
-                  _href "https://danielmiessler.com/study/vim/"
-                  span { text "More Advanced Vim" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "0de016a3d94a491c944d9e014acf4f02"
-          span { text "Vimium" }
-      }
-      div {
-          span {
               text
-                  "Google Chrome extension to speed up your Googling. Use Vim keybindings to navigate around the browser."
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "5e8f6d47794747a9913f0e455fd814c7"
-          span { text "Installation" }
-      }
-      div {
-          span { text "Head to " }
-
-          a {
-              _href "https://vimium.github.io/"
-              span { text "Vimium homepage" }
-          }
-
-          span { text " and click the ‘Install’ button. Or search for ‘Vimium’ in the " }
-
-          a {
-              _href "https://chrome.google.com/webstore/category/extensions"
-              span { text "Chrome Web Store" }
-          }
-
-          span { text " and install from there." }
-      }
-      h4 {
-          _class "mt-4"
-          _id "9554b968670548a987cde6b6332a6a7c"
-          span { text "Usage" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              code {
-                  _class "language-none"
-                  text "j,k"
-              }
-
-              span { text ": used to scroll up and down respectively." }
+                  "dotnet restores NuGet and Paket dependencies, while the local tool manifest restores FAKE, Fantomas, and related tools."
           }
 
           li {
-              code {
-                  _class "language-none"
-                  text "d,u"
-              }
-
-              span { text ": used to page up and down respectively." }
-          }
-
-          li {
-              code {
-                  _class "language-none"
-                  text "f-{other}"
-              }
-
-              span { text ": used to show links on page and then navigate to " }
-
-              code {
-                  _class "language-none"
-                  text "{other}"
-              }
-
-              span { text " which was the shown link." }
-          }
-
-          li {
-              code {
-                  _class "language-none"
-                  text "?"
-              }
-
-              span { text ": show the rest of the keybindings and other help." }
-          }
-      }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "0fc2f8a2f2504da8b0185b0a80562d4e"
-          span { text "Visual Studio Code" }
-      }
-      div { span { text "IDE to speed up your development." } }
-      h4 {
-          _class "mt-4"
-          _id "d4db4295bc23462eb4125f4214b91ce9"
-          span { text "Installation" }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "scoop install vscode" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "02254c35b9844c38bc9715d55adb7c88"
-          span { text "Usage" }
-      }
-      div { span { text "Open current directory in VS Code." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "code ." }
-          }
-      }
-      div { span { text "Open file in VS Code." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "code ./my-file.txt" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "6f403dc7ff0c4907a8ac41c3b166526f"
-          span { text "References" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://code.visualstudio.com/"
-                  span { text "VS Code Homepage" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "d53358bfb6774cf1b1a73d743c81162e"
-          span { text "Git" }
-      }
-      div { span { text "Version control for champs." } }
-      h4 {
-          _class "mt-4"
-          _id "f2a83a7d09c74720ab03fc9ad1c05594"
-          span { text "Installation" }
-      }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "scoop install git" }
-          }
-      }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "git config --global credential.helper manager-core" }
-          }
-      }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "git config --global core.autocrlf true" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "c8419963dc974f17bda7ad813c5f29c7"
-          span { text "Usage" }
-      }
-      div { span { text "Initialize a new repository." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "mkdir my-repo\ncd my-repo\ngit init" }
-          }
-      }
-      div { span { text "Add a file to track." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "echo \"hello\" > hello.txt\ngit add hello.txt" }
-          }
-      }
-      div { span { text "Commit changes." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text "git commit -m 'added hello.txt'" }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "8788b21dfe394fb782765cf1e571d931"
-          span { text "Docker" }
-      }
-      div { span { text "Container management." } }
-      h4 {
-          _class "mt-4"
-          _id "d890c0d3b96a4e2ba392e895af391db7"
-          span { text "Installation" }
-      }
-      div {
-          span { text "Go to " }
-
-          a {
-              _href "https://docs.docker.com/desktop/windows/install/"
-              span { text "Docker install page" }
-          }
-
-          span { text " to install." }
-      }
-      h4 {
-          _class "mt-4"
-          _id "14ebf66e1b184c26adcff2c3dc3f96d9"
-          span { text "Usage" }
-      }
-      div { span { text "View running containers" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "docker ps -a" }
-          }
-      }
-      div { span { text "View local images" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "docker images" }
-          }
-      }
-      div { span { text "Pull image from DockerHub" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "docker pull bash" }
-          }
-      }
-      div { span { text "Run a container" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "docker run -it bash" }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "987a17e9957446638ea3d4b5cc8aadae"
-          span { text "dotnet" }
-      }
-      div { span { text "Cross platform toolchain for developing .NET applications." } }
-      h4 {
-          _class "mt-4"
-          _id "5e1348c00dc547cc98c6a6faa0c836df"
-          span { text "Installation" }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "scoop install dotnet-sdk" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "d6ebf7cd79334fb89907022e29808aee"
-          span { text "Usage" }
-      }
-      div { span { text "Create a new F# console application" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "dotnet new console -lang F# -n my-fsharp-app" }
-          }
-      }
-      div { span { text "Run F# Interactive" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-
-              span {
-                  text
-                      "dotnet fsi\n\nMicrosoft (R) F# Interactive version 12.0.0.0 for F# 6.0\nCopyright (c) Microsoft Corporation. All Rights Reserved.\n\nFor help type #help;;\n\n> let x = 1;;\nval x: int = 1\n\n> let y = 2;;\nval y: int = 2\n\n> x + y;;\nval it: int = 3"
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "a07c6ae342f94aca8894c237ecdc1388"
-          span { text "Node" }
-      }
-      div { span { text "A JavaScript runtime." } }
-      h4 {
-          _class "mt-4"
-          _id "fbddeed3fd6b4d2b92b0474925cc56e5"
-          span { text "Installation" }
-      }
-      div {
-          span { text "First install " }
-
-          a {
-              _href "https://github.com/coreybutler/nvm-windows"
-              span { text "nvm-windows" }
-          }
-
-          span { text "." }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "scoop install nvm" }
-          }
-      }
-      div { span { text "List available versions." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-
-              span {
-                  text
-                      "nvm list available\n\n|   CURRENT    |     LTS      |  OLD STABLE  | OLD UNSTABLE |\n|--------------|--------------|--------------|--------------|\n|    17.8.0    |   16.14.2    |   0.12.18    |   0.11.16    |\n|    17.7.2    |   16.14.1    |   0.12.17    |   0.11.15    |\n|    17.7.1    |   16.14.0    |   0.12.16    |   0.11.14    |\n|    17.7.0    |   16.13.2    |   0.12.15    |   0.11.13    |\n|    17.6.0    |   16.13.1    |   0.12.14    |   0.11.12    |\n|    17.5.0    |   16.13.0    |   0.12.13    |   0.11.11    |\n|    17.4.0    |   14.19.1    |   0.12.12    |   0.11.10    |\n|    17.3.1    |   14.19.0    |   0.12.11    |    0.11.9    |\n|    17.3.0    |   14.18.3    |   0.12.10    |    0.11.8    |\n|    17.2.0    |   14.18.2    |    0.12.9    |    0.11.7    |\n|    17.1.0    |   14.18.1    |    0.12.8    |    0.11.6    |\n|    17.0.1    |   14.18.0    |    0.12.7    |    0.11.5    |\n|    17.0.0    |   14.17.6    |    0.12.6    |    0.11.4    |\n|   16.12.0    |   14.17.5    |    0.12.5    |    0.11.3    |\n|   16.11.1    |   14.17.4    |    0.12.4    |    0.11.2    |\n|   16.11.0    |   14.17.3    |    0.12.3    |    0.11.1    |\n|   16.10.0    |   14.17.2    |    0.12.2    |    0.11.0    |\n|    16.9.1    |   14.17.1    |    0.12.1    |    0.9.12    |\n|    16.9.0    |   14.17.0    |    0.12.0    |    0.9.11    |\n|    16.8.0    |   14.16.1    |   0.10.48    |    0.9.10    |"
-              }
-          }
-      }
-      div { span { text "Install the latest LTS." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "nvm install 16.14.2" }
-          }
-      }
-      div { span { text "Use installed version." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "nvm use 16.14.2" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "a26cf862186f4a53a85384051bc506b4"
-          span { text "Usage" }
-      }
-      div { span { text "Run JavaScript REPL." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-
-              span {
-                  text
-                      "node\nWelcome to Node.js v14.17.0.\nType \".help\" for more information.\n> var x = 1;\nundefined\n> var y = 2;\nundefined\n> x + y\n3"
-              }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "a4b8f32372fd4523bd69f77997d65523"
-          span { text "Resources" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://github.com/coreybutler/nvm-windows"
-                  span { text "nvm-windows" }
-              }
-          }
-
-          li {
-              a {
-                  _href "https://nodejs.org/en/docs/"
-                  span { text "Node docs" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "9440715cc7e740cea2f4bdab7d77b9af"
-          span { text "Python" }
-      }
-      div { span { text "Easy to read, learn, and use programming language." } }
-      h4 {
-          _class "mt-4"
-          _id "c1d21d8adaef4e17a5f2c2cbd76711ee"
-          span { text "Installation" }
-      }
-      div {
-          span { text "Install " }
-
-          code {
-              _class "language-none"
-              text "pyenv"
-          }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "scoop install pyenv" }
-          }
-      }
-      div { span { text "List available versions" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-
-              span {
-                  text
-                      "pyenv install --list\n:: [Info] ::  Mirror: https://www.python.org/ftp/python\n3.8.9\n3.8.10\n3.9.0\n3.9.2\n3.9.6"
-              }
-          }
-      }
-      div { span { text "Install latest version." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "pyenv install 3.9.6" }
-          }
-      }
-      div { span { text "Set latest as global version." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "pyenv global 3.9.6" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "82151d8fe59f4c148b64e4125434ee3b"
-          span { text "Usage" }
-      }
-      div { span { text "Check version." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "python --version" }
-          }
-      }
-      div { span { text "Run Python REPL." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-
-              span {
-                  text
-                      "python\nPython 3.8.2 (tags/v3.8.2:7b3ab59, Feb 25 2020, 23:03:10) [MSC v.1916 64 bit (AMD64)] on win32\nType \"help\", \"copyright\", \"credits\" or \"license\" for more information.\n>>> x = 1\n>>> y = 2\n>>> x + y\n3"
-              }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "0dcaf2ab2d004f8887a3d902076b26da"
-          span { text "References" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://www.python.org/"
-                  span { text "Python homepage" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "dc8d7f26672e457b9f1d93c796f3c22c"
-          span { text "kubectl" }
-      }
-      div { span { text "Kubernetes CLI." } }
-      h4 {
-          _class "mt-4"
-          _id "622bb5b9c2b94509bee7897d0f024308"
-          span { text "Installation" }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "scoop install kubectl" }
-          }
-      }
-      div {
-          span { text "Update your " }
-
-          code {
-              _class "language-none"
-              text "KUBECONFIG"
-          }
-
-          span { text " environment variable and (optionally) add an alias." }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "vim $PROFILE" }
-          }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "$env:KUBECONFIG = \"C:\\Users\\<user>\\.kube\\config;\"\nSet-Alias k kubectl" }
-          }
-      }
-      div { span { text "Then reload your profile." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text ". $PROFILE" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "32f1a4f3d38041e293220ee37a4d114b"
-          span { text "Usage" }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "k get pods --all-namespaces" }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "09e3cf5418074ca6aa8cee17a05913e2"
-          span { text "kubectxwin" }
-      }
-      div { span { text "CLI for configuring Kubernetes contexts" } }
-      h4 {
-          _class "mt-4"
-          _id "12d198f06176419182a932f3a336824b"
-          span { text "Installation" }
-      }
-      div { span { text "Clone the repository." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "git clone https://github.com/thomasliddledba/kubectxwin.git" }
-          }
-      }
-      div { span { text "Add the executable to the PATH and (optionally) add an alias." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "vim $PROFILE" }
-          }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "$env:Path += \";C:\\<path to kubectxwin repo>\\bin\"\nSet-Alias ktx kubectxwin" }
-          }
-      }
-      div { span { text "Reload your profile." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text ". $PROFILE" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "246edef1fe5e45cc932271dbab566aad"
-          span { text "Usage" }
-      }
-      div { span { text "View contexts" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "ktx ls" }
-          }
-      }
-      div { span { text "Change context" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "ktx set docker-desktop\nSwitched to context \"docker-for-desktop\"." }
-          }
-      }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "8d6aae336cb64346a8596d6d328f63ff"
-          span { text "kubenswin" }
-      }
-      div { span { text "CLI for configuring Kubernetes namespaces" } }
-      h4 {
-          _class "mt-4"
-          _id "2cccdfa0b9a945539c46515d7f437a5d"
-          span { text "Installation" }
-      }
-      div { span { text "Clone the repository." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "git clone https://github.com/thomasliddledba/kubenswin.git" }
-          }
-      }
-      div { span { text "Add the executable to the PATH and (optionally) add an alias." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "vim $PROFILE" }
-          }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "$env:Path += \";C:\\{path to kubenswin repo}\\bin\"\nSet-Alias kns kubenswin" }
-          }
-      }
-      div { span { text "Reload your profile." } }
-      pre {
-          _class "language-powershell"
-
-          code {
-              _class "language-powershell"
-              span { text ". $PROFILE" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "5b242f77f68a48a1b01d7a525f53170c"
-          span { text "Usage" }
-      }
-      div { span { text "View namespaces" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "kns ls" }
-          }
-      }
-      div { span { text "Change namespace" } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "kns set kube-system" }
-          }
-      }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "574b57c6b7eb40e6876b7e784fbd12a5"
-          span { text "Helm" }
-      }
-      div { span { text "Package manager for Kubernetes." } }
-      h4 {
-          _class "mt-4"
-          _id "c7dfe063ad1049a7852d327944082712"
-          span { text "Installation" }
-      }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "scoop install helm" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "6c99bf09cf264266a0744b5e6475254e"
-          span { text "Usage" }
-      }
-      div { span { text "Install a chart (i.e., package)." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "helm install stable/postgresql --name my-postgres" }
-          }
-      }
-      div { span { text "List charts." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "helm list" }
-          }
-      }
-      div { span { text "Show status of chart." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "helm status my-postgres" }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "25f686d21b1b4c198bd8815c22259c1f"
-          span { text "Pulumi" }
-      }
-      div { span { text "Infrastructure as code." } }
-      h4 {
-          _class "mt-4"
-          _id "71b4c1ab23944ee5a4529ba4f3b0186c"
-          span { text "Installation" }
-      }
-      div { span { text "Install using Scoop." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "scoop install pulumi" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "4e74b911a37545f094daf9001a729ac2"
-          span { text "Usage" }
-      }
-      div { span { text "Create a new project." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "mkdir pulumi\npulumi new kubernetes-typescript" }
-          }
-      }
-      div { span { text "Preview the changes." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "pulumi preview" }
-          }
-      }
-      div { span { text "Update the resources." } }
-      pre {
-          _class "language-plain text"
-
-          code {
-              _class "language-plain text"
-              span { text "pulumi up" }
-          }
-      }
-      h4 {
-          _class "mt-4"
-          _id "cdf41758f1f245cb9107050198cc4c40"
-          span { text "Resources" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://www.pulumi.com/"
-                  span { text "Pulumi" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "ef28796ed44c4f50a81aa6a9f053b00c"
-          span { text "Lightshot" }
-      }
-      div { span { text "Screen capture tool. (Used for most of the images in this post.)" } }
-      h4 {
-          _class "mt-4"
-          _id "20e7cdcb76034d26bf914fbaed5153da"
-          span { text "Installation" }
-      }
-      div {
-          span { text "Install Lightshot by downloading " }
-
-          a {
-              _href "https://app.prntscr.com/en/index.html"
-              span { text "here" }
-          }
-
-          span { text "." }
-      }
-      h4 {
-          _class "mt-4"
-          _id "8e38c631ef9f4618ad060626297884b7"
-          span { text "Usage" }
-      }
-      div {
-          span { text "Take a screen shot by pressing the " }
-
-          code {
-              _class "language-none"
-              text "PrtScr"
-          }
-
-          span {
               text
-                  " button on your keyboard. You can then select an area on your screen, add lines or arrows, and save or copy the image to your clipboard."
+                  "Docker and Compose provide services such as Postgres, Airbyte, and other repository-specific infrastructure when a project needs them."
           }
       }
-      h4 {
-          _class "mt-4"
-          _id "9df5b39db26c45cab55e51e9d46f7855"
-          span { text "Resources" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://app.prntscr.com/en/index.html"
-                  span { text "Lightshot homepage" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "480356f622e441b1a1d8386ca7fffa97"
-          span { text "ScreenToGif" }
-      }
-      div { span { text "Screen capture tool, but GIFs." } }
-      h4 {
-          _class "mt-4"
-          _id "ea103d45657e49fbacf5baa74f88b2d1"
-          span { text "Installation" }
-      }
-      div {
-          span { text "Download and install from " }
-
-          a {
-              _href "https://www.screentogif.com/"
-              span { text "screentogif.com" }
-          }
-
-          span { text "." }
-      }
-      h4 {
-          _class "mt-4"
-          _id "cbf4b23e2545417db65f03591c08f94f"
-          span { text "Usage" }
-      }
-      div { span { text "Start ScreenToGif." } }
-      div {
-          span { text "Drag the window around the area you would like to record and press " }
-
-          code {
-              _class "language-none"
-              text "F7"
-          }
-
-          span { text " to start recording. Press " }
-
-          code {
-              _class "language-none"
-              text "F8"
-          }
-
-          span { text " to stop recording." }
-      }
-      img {
-          _class "drop-shadow-xl rounded"
-          _src "https://assets.meiermade.com/andymeier/articles/dev-env/screentogif-demo-57717811367a.gif"
-          _alt "ScreenToGif recording controls around a selected screen area"
-          _attr ("loading", "lazy")
-          _attr ("width", "945")
-          _attr ("height", "492")
-      }
-      h4 {
-          _class "mt-4"
-          _id "b6bce6d12c4d44d1b006354c7ee0f290"
-          span { text "Resources" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://www.screentogif.com/"
-                  span { text "ScreenToGif homepage" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" }
-      h3 {
-          _class "mt-6"
-          _id "eab0baa1fec84f048158239eac825d77"
-          span { text "OBS Studio" }
-      }
-      div { span { text "Screen recording tool." } }
-      h4 {
-          _class "mt-4"
-          _id "932bd7a700414c9c95946428f679c2bc"
-          span { text "Installation" }
-      }
-      div {
-          span { text "Download and install from " }
-
-          a {
-              _href "https://obsproject.com/download"
-              span { text "OBS Studio website" }
-          }
-
-          span { text "." }
-      }
-      h4 {
-          _class "mt-4"
-          _id "b05f575dc2d4480b8048552838561ce0"
-          span { text "Usage" }
-      }
-      div {
-          span { text "Check out " }
-
-          a {
-              _href "https://becomeablogger.com/obs/"
-              span { text "becomeablogger.com" }
-          }
-
-          span { text " for some great resources on how to use OBS Studio." }
-      }
-      h4 {
-          _class "mt-4"
-          _id "9b787b11af064cac9a39effca7b98693"
-          span { text "Resources" }
-      }
-      ul {
-          _class "list-disc"
-
-          li {
-              a {
-                  _href "https://obsproject.com/"
-                  span { text "OBS Studio" }
-              }
-          }
-      }
-      div { br }
-      div { _class "border-b-2 border-gray-300/60 dark:border-gray-700/60" } ]
+      paragraph
+          "This division is important for Pi as well as for people. When every repository contains its own instructions and deterministic restore commands, the agent can reproduce the same environment locally and in CI instead of relying on undocumented global state."
+      heading "verify" "Verify the setup"
+      paragraph
+          "I finish by opening a new Ghostty window and verifying that the main commands resolve from a clean shell:"
+      codeBlock
+          "bash"
+          "git --version\ngh --version\nop --version\nfnm --version\nnode --version\nnpm --version\nuv --version\ndotnet --version\npi --version\ndocker version\ngcloud version\nkubectl version --client\nkubectx --version\nkubens --version\npulumi version\ncloudflared --version\ngws --version\nrg --version\njq --version\ntmux -V"
+      paragraph
+          "At that point the workstation is ready. Cloning a repository and following its checked-in setup instructions supplies the project-specific layer; Pi, the terminal tools, and the IDEs provide the consistent layer across all of them." ]
 
 let article = Article.create metadata (ArticlePage.primary metadata content)

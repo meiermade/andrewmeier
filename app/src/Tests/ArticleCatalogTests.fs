@@ -13,7 +13,7 @@ let articleCatalogTests =
 
               Expect.equal
                   permalinks
-                  [ "fsharp-semantic-kernel"; "personal-infrastructure"; "dev-env" ]
+                  [ "dev-env"; "fsharp-semantic-kernel"; "personal-infrastructure" ]
                   "Expected the published article catalog"
           }
 
@@ -58,10 +58,40 @@ let articleCatalogTests =
                   "My current infrastructure runs on 3 Raspberry Pis"
                   "Expected infrastructure content"
 
-              Expect.stringContains
-                  developmentEnvironment
-                  "Windows Subsystem for Linux"
-                  "Expected development environment content"
+              for tool in
+                  [ "Homebrew"
+                    "Ghostty"
+                    "Starship"
+                    "tmux"
+                    "GitHub CLI"
+                    "1Password CLI"
+                    "fnm"
+                    "Node.js"
+                    "uv"
+                    ".NET SDK"
+                    "Pi coding agent"
+                    "PyCharm"
+                    "Rider"
+                    "WebStorm"
+                    "Docker Desktop"
+                    "gcloud"
+                    "kubectl"
+                    "kubectx"
+                    "kubens"
+                    "Pulumi"
+                    "cloudflared"
+                    "Google Workspace CLI"
+                    "ripgrep"
+                    "jq"
+                    "Playwright" ] do
+                  Expect.stringContains
+                      developmentEnvironment
+                      tool
+                      $"Expected development environment content for {tool}"
+
+              Expect.isFalse
+                  (developmentEnvironment.Contains "Windows Subsystem for Linux")
+                  "Expected obsolete Windows setup content to be removed"
           }
 
           test "finds articles by permalink" {

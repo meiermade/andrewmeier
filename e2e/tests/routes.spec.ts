@@ -39,6 +39,16 @@ test('articles index renders and opens a source-controlled article', async ({ pa
   await expect(page.getByText('Microsoft’s Semantic Kernel SDK', { exact: false }).first()).toBeVisible()
 })
 
+test('development environment article presents the current setup', async ({ page }) => {
+  const response = await page.goto('/articles/dev-env', { waitUntil: 'domcontentloaded' })
+
+  expect(response?.status()).toBe(200)
+  await expect(page.getByRole('heading', { name: 'Development Environment', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pi coding agent', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'JetBrains IDEs', exact: true })).toBeVisible()
+  await expect(page.getByText('Windows Subsystem for Linux', { exact: false })).toHaveCount(0)
+})
+
 test('article search, detail content, and GCS images are deterministic', async ({ page }) => {
   await page.goto('/articles?search=semantic', { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
@@ -57,7 +67,7 @@ test('article search, detail content, and GCS images are deterministic', async (
 test('article filter disclosures support native keyboard selection', async ({ page }) => {
   for (const filter of [
     { name: 'tag', ariaLabel: 'Tag filter', value: '.NET' },
-    { name: 'year', ariaLabel: 'Published year filter', value: '2024' },
+    { name: 'year', ariaLabel: 'Published year filter', value: '2026' },
   ]) {
     await page.goto('/articles', { waitUntil: 'domcontentloaded' })
     await page.getByText('+ Add filter', { exact: true }).click()
@@ -142,7 +152,12 @@ test('articles remain usable at a mobile viewport', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
-  await page.goto('/articles/personal-infrastructure', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('heading', { name: 'Personal Infrastructure', exact: true })).toBeVisible()
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  for (const article of [
+    { path: '/articles/personal-infrastructure', title: 'Personal Infrastructure' },
+    { path: '/articles/dev-env', title: 'Development Environment' },
+  ]) {
+    await page.goto(article.path, { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: article.title, exact: true })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  }
 })
