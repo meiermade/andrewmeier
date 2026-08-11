@@ -13,7 +13,7 @@ let articleCatalogTests =
 
               Expect.equal
                   permalinks
-                  [ "dev-env"; "fsharp-semantic-kernel"; "personal-infrastructure" ]
+                  [ "personal-infrastructure"; "dev-env"; "fsharp-semantic-kernel" ]
                   "Expected the published article catalog"
           }
 
@@ -53,10 +53,19 @@ let articleCatalogTests =
 
               Expect.stringContains semanticKernel "Semantic Kernel SDK" "Expected Semantic Kernel content"
 
-              Expect.stringContains
-                  infrastructure
-                  "My current infrastructure runs on 3 Raspberry Pis"
-                  "Expected infrastructure content"
+              for topic in
+                  [ "Google Kubernetes Engine"
+                    "Pulumi ESC"
+                    "Cloudflare Tunnel"
+                    "Seq"
+                    "Snowplow"
+                    "zonal" ] do
+                  Expect.stringContains infrastructure topic $"Expected infrastructure content for {topic}"
+
+              for obsoleteTopic in [ "Raspberry Pi"; "Penpot"; "Amazon Web Services" ] do
+                  Expect.isFalse
+                      (infrastructure.Contains obsoleteTopic)
+                      $"Expected obsolete infrastructure content for {obsoleteTopic} to be removed"
 
               for tool in
                   [ "Homebrew"

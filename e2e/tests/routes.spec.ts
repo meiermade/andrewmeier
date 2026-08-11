@@ -50,7 +50,7 @@ test('development environment article presents the current setup', async ({ page
   await expect(page.locator('article > div')).toHaveCSS('padding-bottom', '32px')
 })
 
-test('article search, detail content, and GCS images are deterministic', async ({ page }) => {
+test('article search and source-controlled detail content are deterministic', async ({ page }) => {
   await page.goto('/articles?search=semantic', { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Clear search' })).toBeVisible()
@@ -60,9 +60,12 @@ test('article search, detail content, and GCS images are deterministic', async (
   await expect(page.getByRole('heading', { name: 'Personal Infrastructure', exact: true }).first()).toBeVisible()
   await expect(page.getByText('DevOps', { exact: true }).first()).toBeVisible()
 
-  const clusterImage = page.getByRole('img', { name: 'Three Raspberry Pi computers mounted in a home server rack' })
-  await expect(clusterImage).toHaveAttribute('src', /^https:\/\/assets\.meiermade\.com\/andymeier\/articles\//)
-  await expect.poll(() => clusterImage.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  await expect(page.getByRole('heading', { name: 'The platform at a glance', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Observability and analytics', exact: true })).toBeVisible()
+  await expect(page.getByText('Seq', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Snowplow', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Raspberry Pi', { exact: false })).toHaveCount(0)
+  await expect(page.getByText('Penpot', { exact: false })).toHaveCount(0)
 })
 
 test('article filter disclosures support native keyboard selection', async ({ page }) => {
