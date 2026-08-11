@@ -4,9 +4,12 @@
 @plugin "@tailwindcss/typography";
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Inline code: monospace fonts render larger at the same font-size,
-   so scale down to visually match surrounding body text. */
-.prose :not(pre) > code[class*="language-"] {
+/* Monospace fonts render larger at the same font-size,
+   so scale code down to visually match surrounding body text. */
+.prose code[class*="language-"] {
     font-size: 0.875em;
+}
+
+.prose :not(pre) > code[class*="language-"] {
     overflow-wrap: anywhere;
 }
