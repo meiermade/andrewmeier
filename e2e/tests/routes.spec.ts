@@ -47,6 +47,7 @@ test('development environment article presents the current setup', async ({ page
   await expect(page.getByRole('heading', { name: 'Pi coding agent', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'JetBrains IDEs', exact: true })).toBeVisible()
   await expect(page.getByText('Windows Subsystem for Linux', { exact: false })).toHaveCount(0)
+  await expect(page.locator('article > div')).toHaveCSS('padding-bottom', '32px')
 })
 
 test('article search, detail content, and GCS images are deterministic', async ({ page }) => {

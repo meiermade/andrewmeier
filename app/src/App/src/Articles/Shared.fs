@@ -103,7 +103,7 @@ module ArticlePage =
 
                 div {
                     _class
-                        "mt-8 prose prose-lg dark:prose-invert prose-code:before:hidden prose-code:after:hidden max-w-none"
+                        "mt-8 pb-8 prose prose-lg dark:prose-invert prose-code:before:hidden prose-code:after:hidden max-w-none"
 
                     _dataInit "highlightCode($el)"
 
