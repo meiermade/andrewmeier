@@ -67,6 +67,7 @@ let articleCatalogTests =
                     "fn::open::pulumi-stacks"
                     "new k8s.apps.v1.Deployment"
                     "mermaid.11.16.0.min.js"
+                    "flowchart TB"
                     "accTitle: Meier Made platform system context" ] do
                   Expect.stringContains infrastructure topic $"Expected infrastructure content for {topic}"
 

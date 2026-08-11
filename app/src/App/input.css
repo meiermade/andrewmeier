@@ -15,7 +15,7 @@
 }
 
 .article-mermaid svg {
-    min-width: 52rem;
+    min-width: 40rem;
     max-width: none;
     height: auto;
 }

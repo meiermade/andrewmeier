@@ -44,7 +44,7 @@ let private link href label = a {
 }
 
 let private systemContextDiagram =
-    """flowchart LR
+    """flowchart TB
     accTitle: Meier Made platform system context
     accDescr: The developer and product users interact with the Meier Made Platform through GitHub Actions, Pulumi Cloud, Google Cloud, Cloudflare, and identity providers.
 
@@ -70,10 +70,16 @@ let private systemContextDiagram =
 
 let private systemContext = figure {
     _class
-        "not-prose my-8 max-w-full overflow-x-auto rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 sm:p-6"
+        "not-prose my-8 max-w-full overflow-x-auto rounded-xl border border-gray-200 bg-white p-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-700 dark:bg-gray-800 sm:p-6"
 
     _attr ("data-system-context", "true")
+    _attr ("tabindex", "0")
     _dataInit "renderMermaid($el)"
+
+    figcaption {
+        _class "mb-3 text-xs text-gray-500 dark:text-gray-400 md:hidden"
+        text "Scroll horizontally to see the complete diagram."
+    }
 
     div {
         _class "mermaid article-mermaid"

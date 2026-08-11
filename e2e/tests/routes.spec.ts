@@ -72,6 +72,9 @@ test('article search and source-controlled detail content are deterministic', as
   await expect(diagram.locator('svg title')).toHaveText('Meier Made platform system context')
   await expect(diagram.locator('svg desc')).toContainText('GitHub Actions, Pulumi Cloud, Google Cloud, Cloudflare, and identity providers')
 
+  const [, , diagramWidth, diagramHeight] = (await diagram.locator('svg').getAttribute('viewBox'))!.split(' ').map(Number)
+  expect(diagramHeight).toBeGreaterThan(diagramWidth)
+
   const lightDiagram = await diagram.locator('svg').innerHTML()
   await page.getByRole('button', { name: 'Choose theme' }).click()
   await page.getByRole('button', { name: 'Dark' }).click()
@@ -185,6 +188,7 @@ test('articles remain usable at a mobile viewport', async ({ page }) => {
     if (article.path === '/articles/personal-infrastructure') {
       const diagram = page.locator('[data-system-context]')
       await expect(diagram.locator('svg')).toBeVisible()
+      await expect(diagram.getByText('Scroll horizontally to see the complete diagram.')).toBeVisible()
       expect(await diagram.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
     }
   }
