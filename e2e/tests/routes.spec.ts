@@ -51,6 +51,7 @@ test('development environment article presents the current setup', async ({ page
 })
 
 test('article search and source-controlled detail content are deterministic', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('theme', 'light'))
   await page.goto('/articles?search=semantic', { waitUntil: 'domcontentloaded' })
   await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Clear search' })).toBeVisible()
@@ -60,10 +61,27 @@ test('article search and source-controlled detail content are deterministic', as
   await expect(page.getByRole('heading', { name: 'Personal Infrastructure', exact: true }).first()).toBeVisible()
   await expect(page.getByText('DevOps', { exact: true }).first()).toBeVisible()
 
-  await expect(page.getByRole('heading', { name: 'The platform at a glance', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'System context', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Repository layout', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Observability and analytics', exact: true })).toBeVisible()
   await expect(page.getByText('Seq', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('Snowplow', { exact: true }).first()).toBeVisible()
+
+  const diagram = page.locator('[data-system-context]')
+  await expect(diagram.locator('svg')).toBeVisible()
+  await expect(diagram.locator('svg title')).toHaveText('Meier Made platform system context')
+  await expect(diagram.locator('svg desc')).toContainText('GitHub Actions, Pulumi Cloud, Google Cloud, Cloudflare, and identity providers')
+
+  const lightDiagram = await diagram.locator('svg').innerHTML()
+  await page.getByRole('button', { name: 'Choose theme' }).click()
+  await page.getByRole('button', { name: 'Dark' }).click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect.poll(async () => {
+    const svg = diagram.locator('svg')
+    return await svg.getAttribute('aria-roledescription') !== 'error' && await svg.innerHTML() !== lightDiagram
+  }).toBe(true)
+  await expect(diagram.locator('svg title')).toHaveText('Meier Made platform system context')
+
   await expect(page.getByText('Raspberry Pi', { exact: false })).toHaveCount(0)
   await expect(page.getByText('Penpot', { exact: false })).toHaveCount(0)
 })
@@ -163,5 +181,11 @@ test('articles remain usable at a mobile viewport', async ({ page }) => {
     await page.goto(article.path, { waitUntil: 'domcontentloaded' })
     await expect(page.getByRole('heading', { name: article.title, exact: true })).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+    if (article.path === '/articles/personal-infrastructure') {
+      const diagram = page.locator('[data-system-context]')
+      await expect(diagram.locator('svg')).toBeVisible()
+      expect(await diagram.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+    }
   }
 })

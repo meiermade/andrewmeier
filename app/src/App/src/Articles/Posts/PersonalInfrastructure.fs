@@ -2,8 +2,10 @@ module App.Articles.Posts.PersonalInfrastructure
 
 open App.Articles
 open App.Articles.Shared
+open App.Common.View
 open FSharp.ViewEngine
 open System
+open type Datastar
 open type Html
 
 let private metadata =
@@ -20,12 +22,6 @@ let private heading id' label = h2 {
     text label
 }
 
-let private subheading id' label = h3 {
-    _class "mt-6 scroll-mt-24"
-    _id id'
-    text label
-}
-
 let private paragraph value = p { text value }
 
 let private inlineCode value = code {
@@ -33,85 +29,196 @@ let private inlineCode value = code {
     text value
 }
 
+let private codeBlock language value = pre {
+    _class $"language-{language}"
+
+    code {
+        _class $"language-{language}"
+        span { text value }
+    }
+}
+
 let private link href label = a {
     _href href
     text label
 }
 
-let private architectureStep number title description = li {
-    _class "relative border-l border-gray-200 pl-6 dark:border-gray-700 lg:border-l-0 lg:border-t lg:pl-0 lg:pt-6"
+let private systemContextDiagram =
+    """flowchart LR
+    accTitle: Meier Made platform system context
+    accDescr: The developer and product users interact with the Meier Made Platform through GitHub Actions, Pulumi Cloud, Google Cloud, Cloudflare, and identity providers.
 
-    span {
-        _class
-            "absolute -left-3 -top-1 inline-flex size-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-semibold text-white ring-4 ring-white dark:bg-emerald-500 dark:ring-gray-900 lg:-top-3 lg:left-0"
+    operator["Developer and operator<br/>(Person)<br/>Builds and operates the platform"]
+    users["Product users and website visitors<br/>(People)<br/>Use hosted applications"]
+    platform["Meier Made Platform<br/>(Software system)<br/>Runs applications, data services, analytics, and operational tooling"]:::system
+    github["GitHub Actions<br/>(External system)<br/>Tests, previews, and deploys reviewed changes"]
+    pulumi["Pulumi Cloud and ESC<br/>(External system)<br/>Stores state and composes credentials and configuration"]
+    gcp["Google Cloud<br/>(External system)<br/>Runs compute, networking, databases, messaging, and storage"]
+    cloudflare["Cloudflare<br/>(External system)<br/>Provides DNS, edge policy, Access, and tunnels"]
+    identity["Auth0 and Google Workspace<br/>(External systems)<br/>Authenticate customers and administrators"]
 
-        text number
-    }
+    operator -->|Commits and reviews changes| github
+    operator -->|Operates services| platform
+    github -->|Runs Pulumi programs| pulumi
+    pulumi -->|Applies desired state| platform
+    users -->|Use applications through| cloudflare
+    cloudflare -->|Routes private-origin traffic| platform
+    platform -->|Runs on| gcp
+    platform -->|Delegates identity to| identity
 
-    h3 {
-        _class "m-0 text-base font-semibold text-gray-900 dark:text-gray-100"
-        text title
-    }
+    classDef system fill:#059669,stroke:#047857,color:#ffffff,stroke-width:3px"""
 
-    p {
-        _class "mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400"
-        text description
-    }
-}
-
-let private architectureOverview = section {
+let private systemContext = figure {
     _class
-        "not-prose my-10 rounded-2xl border border-gray-200 bg-gray-50/70 p-6 dark:border-gray-700 dark:bg-gray-800/40 sm:p-8"
+        "not-prose my-8 max-w-full overflow-x-auto rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 sm:p-6"
 
-    _ariaLabel "Infrastructure layers"
+    _attr ("data-system-context", "true")
+    _dataInit "renderMermaid($el)"
 
     div {
-        _class "max-w-2xl"
-
-        p {
-            _class "text-sm font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400"
-            text "Dependency order"
-        }
-
-        p {
-            _class "mt-2 text-lg font-semibold text-gray-900 dark:text-gray-100"
-            text "Identity establishes trust; each later layer consumes the outputs before it."
-        }
-    }
-
-    ol {
-        _class "mt-8 grid grid-cols-1 gap-7 lg:grid-cols-4 lg:gap-6"
-
-        architectureStep
-            "1"
-            "Platform identity"
-            "Projects, service accounts, IAM grants, groups, and workload-identity bindings."
-
-        architectureStep
-            "2"
-            "Shared infrastructure"
-            "Networking, GKE, databases, storage, secrets, edge services, and shared workloads."
-
-        architectureStep
-            "3"
-            "Environments"
-            "Pulumi ESC composes stack outputs, short-lived credentials, secrets, and configuration."
-
-        architectureStep
-            "4"
-            "Applications"
-            "Product repositories build images and deploy workloads into their assigned boundaries."
+        _class "mermaid article-mermaid"
+        text systemContextDiagram
     }
 }
+
+let private sharedRepositoryTree =
+    """meiermade/
+├── platform-identity/
+│   ├── index.ts
+│   └── src/gcp/
+│       ├── project.ts
+│       ├── serviceAccount.ts
+│       ├── grant.ts
+│       └── workloadIdentityPool.ts
+│
+├── platform-infrastructure/
+│   ├── index.ts
+│   └── src/
+│       ├── auth0/
+│       ├── cloudflare/
+│       ├── gcp/
+│       └── k8s/
+│
+└── environments/
+    ├── index.ts
+    └── environments/
+        ├── platform-identity/
+        ├── platform-infrastructure/
+        ├── shared/
+        └── <application>/"""
+
+let private applicationRepositoryTree =
+    """application/
+├── app/
+│   ├── src/App/
+│   ├── src/Build/
+│   ├── src/Tests/
+│   ├── Dockerfile
+│   └── fake.sh
+├── pulumi/
+│   ├── index.ts
+│   └── src/
+│       ├── cloudflare/
+│       ├── docker/
+│       └── k8s/
+├── e2e/
+│   └── tests/
+└── .github/workflows/
+    ├── preview.yml
+    └── deploy.yml"""
+
+let private gkeExample =
+    """const cluster = new gcp.container.Cluster('platform', {
+    location: `${region}-b`,
+    network: network.id,
+    subnetwork: subnet.id,
+    removeDefaultNodePool: true,
+    ipAllocationPolicy: {
+        clusterSecondaryRangeName: 'pods',
+        servicesSecondaryRangeName: 'services',
+    },
+    privateClusterConfig: {
+        enablePrivateNodes: true,
+        enablePrivateEndpoint: false,
+    },
+    releaseChannel: { channel: 'REGULAR' },
+    workloadIdentityConfig: {
+        workloadPool: `${projectId}.svc.id.goog`,
+    },
+})
+
+new gcp.container.NodePool('platform-primary', {
+    cluster: cluster.name,
+    autoscaling: { minNodeCount: 1, maxNodeCount: 4 },
+    management: { autoRepair: true, autoUpgrade: true },
+})"""
+
+let private applicationDeploymentExample =
+    """const deployment = new k8s.apps.v1.Deployment('app', {
+    metadata: { namespace: config.k8s.namespace },
+    spec: {
+        replicas: 1,
+        selector: { matchLabels: labels },
+        template: {
+            metadata: { labels },
+            spec: {
+                securityContext: { runAsNonRoot: true },
+                containers: [{
+                    name: 'app',
+                    image: image.imageRef,
+                    resources: {
+                        requests: { cpu: '25m', memory: '64Mi' },
+                        limits: { cpu: '250m', memory: '256Mi' },
+                    },
+                    livenessProbe: {
+                        httpGet: { path: '/health', port: 5000 },
+                    },
+                    readinessProbe: {
+                        httpGet: { path: '/health', port: 5000 },
+                    },
+                }],
+            },
+        },
+    },
+})"""
+
+let private escExample =
+    """values:
+  stacks:
+    fn::open::pulumi-stacks:
+      stacks:
+        identity:
+          stack: platform-identity/prod
+        infrastructure:
+          stack: platform-infrastructure/prod
+
+  gcpLogin:
+    fn::open::gcp-login:
+      project: ${stacks.identity.platformProjectNumber}
+      oidc:
+        workloadPoolId: ${stacks.identity.workloadIdentityPoolId}
+        providerId: pulumi
+        serviceAccount: ${stacks.identity.applicationDeployerEmail}
+
+  environmentVariables:
+    GOOGLE_OAUTH_ACCESS_TOKEN: ${gcpLogin.accessToken}
+
+  files:
+    KUBECONFIG: ${stacks.infrastructure.kubeconfig}
+
+  pulumiConfig:
+    docker:registryUri: ${stacks.infrastructure.registryUri}
+    k8s:namespace: ${stacks.infrastructure.applicationNamespace}
+    seq:endpoint: ${stacks.infrastructure.seqIngestEndpoint}"""
 
 let private content =
     [ p {
           text
-              "My personal infrastructure is a small cloud platform for the applications, data systems, automation, and internal tools I operate through Meier Made. It uses managed Google Cloud services for the parts that are expensive to operate well, Kubernetes as the common workload layer, Cloudflare as the edge, and Pulumi to keep the entire system reviewable as code."
+              "My personal infrastructure is a small cloud platform for the applications, data systems, automation, and internal tools I operate through Meier Made. Google Cloud provides managed compute and data services, Kubernetes is the common workload layer, Cloudflare is the edge, and Pulumi keeps the system reviewable as code."
       }
       p {
           text
-              "The goal is not to imitate a large enterprise platform. It is to create one dependable foundation that I can understand, change safely, and reuse across products without rebuilding identity, networking, databases, observability, and deployment automation every time. The result is deliberately modest in scale but complete enough to support real production workloads."
+              "The goal is one foundation that I can understand and reuse without rebuilding identity, networking, databases, observability, and deployment automation for every product. It is intentionally modest in scale, but it supports real production workloads and a repeatable path from a pull request to a running application."
       }
       nav {
           _ariaLabel "Table of contents"
@@ -125,17 +232,13 @@ let private content =
               _class "list-disc"
 
               for id', label in
-                  [ "principles", "Design principles"
-                    "platform", "The platform at a glance"
-                    "identity", "Identity before infrastructure"
-                    "gcp", "The shared GCP foundation"
-                    "kubernetes", "Kubernetes as the workload boundary"
-                    "edge", "Cloudflare at the edge"
-                    "data", "Data, storage, and secrets"
+                  [ "context", "System context"
+                    "repositories", "Repository layout"
+                    "foundation", "Identity and GCP foundation"
+                    "applications", "Application repositories"
+                    "services", "Edge and data services"
                     "observability", "Observability and analytics"
-                    "environments", "Pulumi ESC as the configuration layer"
-                    "delivery", "Application delivery"
-                    "operations", "Operating the platform"
+                    "environments", "Environments and delivery"
                     "tradeoffs", "Intentional tradeoffs" ] do
                   li {
                       a {
@@ -145,254 +248,117 @@ let private content =
                   }
           }
       }
-      heading "principles" "Design principles"
+      heading "context" "System context"
       paragraph
-          "I use a few principles to decide whether a resource belongs in the platform and how it should be managed. They keep the architecture from becoming either a collection of one-off application stacks or an oversized internal platform."
-      ul {
-          _class "list-disc"
-
-          li {
-              strong { text "Managed where operations matter." }
-
-              text
-                  " Google manages the Kubernetes control plane, PostgreSQL, Redis, object storage, secret storage, and the underlying availability and patching concerns for those services."
-          }
-
-          li {
-              strong { text "One owner for every resource." }
-
-              text
-                  " Identity, shared infrastructure, environment composition, and application deployment have distinct Pulumi projects. A resource lives at the lowest layer that can own it without creating duplication."
-          }
-
-          li {
-              strong { text "Short-lived identity by default." }
-
-              text
-                  " CI and supported workloads exchange identity for temporary credentials instead of carrying static cloud keys. Permissions are granted to purpose-specific service accounts rather than to one universal deployer."
-          }
-
-          li {
-              strong { text "Private origins." }
-
-              text
-                  " Worker nodes and data services live on private networking. Cloudflare Tunnel carries application traffic to the cluster without requiring a public Kubernetes load balancer."
-          }
-
-          li {
-              strong { text "Preview before update." }
-
-              text
-                  " Infrastructure changes arrive through pull requests with tests and Pulumi previews. The reviewed main branch, rather than a laptop, is the normal path to production."
-          }
-      }
-      heading "platform" "The platform at a glance"
+          "At the widest level, the Meier Made Platform is one software system. People reach its applications through Cloudflare, reviewed changes arrive through GitHub and Pulumi, its workloads run on Google Cloud, and identity is delegated to Google Workspace or Auth0. The diagram deliberately omits internal repositories and services; those belong at the next level of detail."
+      systemContext
       paragraph
-          "The platform is split into four layers. Three shared repositories define identity, common infrastructure, and environments. Product repositories own the final application-specific deployment. The separation is more important than the repository names: each layer has a narrow responsibility and exports only what the next layer needs."
-      architectureOverview
+          "Cloudflare Access protects administrative services with Google Workspace identity, while Auth0 handles customer-facing authentication. Pulumi Cloud stores stack state and Pulumi ESC composes deployment configuration. GitHub Actions is the normal execution environment for previews and updates, using short-lived credentials rather than a permanent Google Cloud key."
+      heading "repositories" "Repository layout"
+      paragraph
+          "The shared platform is split by ownership and deployment order. Identity must exist before shared infrastructure can use it, and both must exist before environments can expose their outputs to applications. Pulumi recommends this kind of layered structure when ownership and blast radius justify separating stacks."
+      codeBlock "none" sharedRepositoryTree
       p {
-          text "The dependency direction is intentional. "
           inlineCode "platform-identity"
-          text " establishes projects and principals. "
+          text " creates projects, service accounts, IAM grants, Google groups, and workload-identity bindings. "
           inlineCode "platform-infrastructure"
-          text " uses those principals to create shared resources and access boundaries. "
+          text " owns the VPC, GKE, data services, Cloudflare, Auth0, namespaces, Seq, and Snowplow. "
           inlineCode "environments"
 
           text
-              " turns outputs and secrets into usable configuration. Application stacks receive that configuration without needing to understand how the platform was assembled."
+              " defines the Pulumi ESC environments that join their outputs and secrets into configuration applications can consume."
       }
       paragraph
-          "Pulumi TypeScript is the common language across these layers. Stack outputs are contracts between projects, while Pulumi ESC is the composition point. This avoids copying values between repositories and makes a dependency visible where it is consumed."
-      heading "identity" "Identity before infrastructure"
+          "Each resource has one owner. Shared capabilities stay in the platform repositories; a product-specific route, image, deployment, or identity client stays with that product. This keeps routine application changes out of the larger shared-infrastructure preview."
+      heading "foundation" "Identity and GCP foundation"
       p {
-          text "The identity layer starts with the "
+          text "The identity layer follows the "
 
           link
               "https://cloud.google.com/resource-manager/docs/cloud-platform-resource-hierarchy"
               "Google Cloud resource hierarchy"
 
           text
-              ". It creates the projects that separate platform, product, and data responsibilities, enables the APIs each project needs, and defines the service accounts used by automation and workloads. Project separation provides a useful IAM and billing boundary without requiring each application to recreate the entire platform."
-      }
-      paragraph
-          "I distinguish deployment identities from runtime identities. A deployer can change a specific Pulumi stack and its assigned Kubernetes namespace. A runtime account receives only the Google Cloud permissions the application needs after it starts. The GKE node account has its own infrastructure role and is not reused as an application identity."
-      p {
-          text "For CI, Pulumi ESC uses OpenID Connect to obtain short-lived Google credentials. "
-
-          link
-              "https://www.pulumi.com/docs/esc/integrations/dynamic-login-credentials/gcp-login/"
-              "ESC's GCP login integration"
-
-          text
-              " exchanges the environment's OIDC assertion for access to a designated deployer account. GitHub Actions needs permission to request an identity token, but it does not need a long-lived Google service-account key in the repository."
-      }
-      p {
-          text "Inside the cluster, "
+              ". Projects separate platform, product, and data permissions. Deployment service accounts are distinct from runtime accounts, and the GKE node identity is not reused by applications. Pulumi ESC obtains short-lived deployment credentials through OpenID Connect, while "
 
           link
               "https://cloud.google.com/kubernetes-engine/docs/concepts/workload-identity"
               "Workload Identity Federation for GKE"
 
-          text
-              " maps Kubernetes service accounts to narrowly scoped Google service accounts. Snowplow components, data workloads, and product services can therefore authenticate to Google APIs without mounting cloud keys into their pods. Some external integrations still impose their own credential constraints, but the normal platform path is keyless."
+          text " gives pods narrowly scoped Google identities without mounted keys."
       }
       paragraph
-          "There is one unavoidable bootstrap boundary: the identity stack cannot create the identity required to deploy itself. A pre-existing workload-identity pool and initial deployer establish that root of trust. After that bootstrap, the identity project manages the normal grants and exports consumed by the rest of the platform."
-      heading "gcp" "The shared GCP foundation"
+          "The shared infrastructure uses a custom VPC, private worker nodes, separate pod and service address ranges, and Cloud NAT for controlled outbound access. The important GKE settings are visible in this abridged version of the current Pulumi program:"
+      codeBlock "typescript" gkeExample
+      paragraph
+          "Google Kubernetes Engine (GKE) Standard mode provides explicit node-pool and workload control. The primary pool scales with demand, while a secondary pool can scale down to zero. Artifact Registry holds immutable application images close to the cluster, and namespaces plus Kubernetes RBAC limit each deployer to its assigned product or data boundary."
+      paragraph
+          "The platform is intentionally zonal. GKE and Cloud SQL favor one zone, and Redis uses the BASIC tier. A zone-level incident can interrupt service, but this keeps the continuous cost appropriate for the workloads. Backups, point-in-time recovery, health probes, deletion protection, and reproducible Pulumi programs address the failure modes that justify their cost today."
+      heading "applications" "Application repositories"
       p {
           text
-              "The shared infrastructure runs in a custom Google Cloud VPC. Google Kubernetes Engine worker nodes use private addresses, and the application and service address ranges are allocated separately from the node subnet. A Cloud NAT gateway provides controlled outbound internet access with a stable egress address, while the cluster does not depend on public addresses for individual nodes."
+              "Application code and its final infrastructure live together because the same owner changes both. A typical repository has this shape:"
       }
+      codeBlock "none" applicationRepositoryTree
+      paragraph
+          "The application directory contains source, tests, the build, and its container definition. The Pulumi project builds and publishes that container, deploys it into the namespace supplied by the platform, and owns its Cloudflare hostname and product-specific resources. Playwright tests and GitHub workflows provide pre- and post-deployment evidence."
+      paragraph
+          "There is no universal application chart. Each stack declares the resources its workload actually needs, while following shared security and operational conventions. A representative deployment looks like this:"
+      codeBlock "typescript" applicationDeploymentExample
+      paragraph
+          "Production deployments also drop unnecessary Linux capabilities and may run an application-specific cloudflared connector beside the app. The essential contract is smaller: a reviewed image, a namespace boundary, realistic resource limits, and health endpoints Kubernetes can use during rollout."
+      heading "services" "Edge and data services"
       p {
-          text "The cluster uses "
-
-          link
-              "https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview#standard"
-              "GKE Standard mode"
-
-          text
-              " because I want explicit control over node pools, Kubernetes resources, and workload placement. A primary node pool handles the regular baseline and can scale with demand. A secondary pool can scale down to zero and provides additional capacity without keeping every possible node running all the time. Google manages the control plane, upgrades follow the regular release channel, and Workload Identity is enabled at the cluster level."
-      }
-      paragraph
-          "Artifact Registry stores application container images close to the cluster. Application pipelines build immutable images, push them to the shared registry, and give Kubernetes the resulting image reference. This makes the deployed artifact explicit and keeps image production in the same reviewed workflow as the deployment that consumes it."
-      subheading "availability" "Availability profile"
-      paragraph
-          "The platform is intentionally zonal. The GKE cluster, Cloud SQL instance, and primary workload placement favor one zone instead of paying for regional redundancy. That is an acceptable trade for my current applications: a zonal outage can interrupt service, but the lower steady-state cost lets me run a proper managed platform continuously. Workload replicas, health probes, backups, and reproducible infrastructure reduce other failure modes without pretending that the system is multi-region."
-      heading "kubernetes" "Kubernetes as the workload boundary"
-      paragraph
-          "Kubernetes is the common execution layer, not the place where every concern is implemented. Stateless web applications, agents, data workloads, tunnel connectors, Seq, and the Snowplow processing components run there. PostgreSQL, Redis, object storage, secrets, Pub/Sub, and BigQuery remain managed Google Cloud services outside the cluster."
-      paragraph
-          "Each product or data workload receives its own namespace. The platform applies default CPU and memory requests, namespace-level limits, and role bindings that grant a product deployer administrative access only inside its namespace. A deployment for one product should not need cluster-wide credentials or permission to change another product's workloads."
-      paragraph
-          "Pods use non-root security contexts where the image supports them, drop unnecessary Linux capabilities, declare resource requests and limits, and expose liveness and readiness probes. These are small controls, but they make scheduling and failure recovery predictable on a compact cluster. They also give a deployment pipeline an objective signal that a rollout is ready before post-deployment checks begin."
-      paragraph
-          "The shared infrastructure project owns cluster-wide boundaries such as namespaces and RBAC. Application projects own their Deployments, Services, configuration, and product-specific service accounts. That division keeps the platform reusable while allowing each application to evolve independently."
-      heading "edge" "Cloudflare at the edge"
-      p {
-          text
-              "Cloudflare provides DNS, traffic filtering, access control, and the connection from the public edge to private services. A "
-
+          text "A "
           link "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/" "Cloudflare Tunnel"
 
           text
-              " is initiated outbound by cloudflared, so the origin does not require a public IP address or an inbound firewall opening. Public DNS records point to tunnel hostnames rather than directly to the cluster."
+              " is initiated outbound from the cluster, so application origins do not require public IP addresses or inbound firewall openings. Public DNS points to tunnel hostnames, and Cloudflare applies edge and Access policy before sending traffic to ClusterIP services. Platform services can share a connector; an application can own one when that gives it a cleaner lifecycle."
       }
-      paragraph
-          "The platform runs a shared tunnel connector for platform services. Applications can also own a dedicated connector when that creates a cleaner lifecycle and access boundary. The high-level pattern remains the same: Cloudflare accepts the request, applies edge policy, and sends it through an authenticated tunnel to a ClusterIP service. There is no public Kubernetes ingress load balancer in the request path."
       p {
-          text "Administrative applications are protected with "
-          link "https://developers.cloudflare.com/cloudflare-one/access-controls/" "Cloudflare Access"
-
-          text
-              ". Interactive access uses Google Workspace as the identity provider, while service tokens cover narrowly defined machine-to-machine routes. Public endpoints, such as websites and analytics collection, use explicit bypass policies rather than being accidentally exposed by a broad rule."
-      }
-      paragraph
-          "Customer identity is a separate concern. Auth0 provides the shared customer-facing tenant, branded login experience, and custom authentication domain. Cloudflare Access answers “who can reach this administrative service?”; Auth0 answers “who is the customer using this product?” Keeping those roles distinct prevents edge administration policy from leaking into product authentication."
-      heading "data" "Data, storage, and secrets"
-      p {
-          text "The transactional data layer is a private "
+          text "The durable transactional store is private "
           link "https://cloud.google.com/sql/docs/postgres" "Cloud SQL for PostgreSQL"
 
           text
-              " instance. It has no public IPv4 address, requires encrypted connections, and exposes its private address only inside the VPC. A platform bootstrap job creates logical databases and restricted application roles so products do not share one superuser credential."
-      }
-      p {
-          text
-              "Automated backups, point-in-time recovery, and deletion protection cover the most important failure paths. "
-
-          link "https://cloud.google.com/sql/docs/postgres/backup-recovery/pitr" "Point-in-time recovery"
-
-          text
-              " is particularly useful because many database incidents are logical mistakes rather than disk failures. Protection also means destructive infrastructure changes must be staged deliberately instead of disappearing in the same update that removes a resource from code."
-      }
-      p {
-          text "A private "
-          link "https://cloud.google.com/memorystore/docs/redis/redis-overview" "Memorystore for Redis"
-
-          text
-              " instance supports caching and short-lived application state. It uses the BASIC tier rather than a replicated high-availability tier. Redis is treated as recoverable infrastructure; PostgreSQL and object storage remain the durable systems of record."
+              ". A bootstrap job creates logical databases and restricted roles rather than distributing one superuser credential. Automated backups, point-in-time recovery, encrypted connections, and deletion protection cover durable state. Private Memorystore provides recoverable cache and short-lived state."
       }
       paragraph
-          "Cloud Storage serves two different purposes. Private buckets hold platform data that should be reachable only by designated service accounts. The public assets bucket serves immutable website assets through a custom domain. Prefix-scoped IAM lets a publisher manage one site's files without gaining write access to every object in the bucket."
-      p {
-          text
-              "Secret Manager holds runtime credentials and integration secrets. Pulumi creates the secret containers and IAM policies, while values are populated separately so plaintext never appears in the infrastructure source. "
-
-          link "https://www.pulumi.com/docs/esc/" "Pulumi ESC"
-
-          text
-              " retrieves the versions at environment-open time and passes them to the stack as secret Pulumi configuration or process environment values."
-      }
+          "Secret Manager holds runtime and integration secrets. Pulumi owns the secret containers and IAM policy, while values are populated separately. Cloud Storage provides private platform buckets and a public asset bucket whose prefix-scoped IAM lets each publisher manage only its own immutable files."
       heading "observability" "Observability and analytics"
       p {
           strong { text "Seq" }
 
           text
-              " is the shared destination for structured application logs and traces. Applications receive the internal ingestion endpoint through their environment and send machine-readable events rather than unstructured log lines. The Seq interface is routed through the platform tunnel and protected with Cloudflare Access, while ingestion uses a scoped API key."
-      }
-      p {
-          text
-              "Centralized events make it possible to follow a request across services, search by structured properties, and inspect production errors without opening a shell in a pod. Kubernetes logs are still useful for low-level diagnosis, but "
-
-          link "https://docs.datalust.co/docs" "Seq"
-          text " is the normal starting point because it preserves the application context attached to each event."
+              " is the shared destination for structured logs and traces. Applications receive its internal ingestion endpoint through their environment, while the interface is routed through Cloudflare Access. Structured properties make Seq the normal starting point for production diagnosis; Kubernetes pod logs remain available for lower-level failures."
       }
       p {
           strong { text "Snowplow" }
 
           text
-              " provides the behavioral analytics pipeline. Collectors in GKE receive website events and publish good and bad records to Pub/Sub. An enrichment workload adds campaign attribution and referrer context, then a loader writes validated events to BigQuery in the data project. Failed records follow separate topics instead of silently disappearing."
+              " provides behavioral analytics. Collectors in GKE publish good and bad events to Pub/Sub, an enrichment workload adds campaign and referrer context, and the BigQuery loader writes validated events to the data project. Separate workload identities limit each component to the Pub/Sub or BigQuery operations it needs, and failed events follow explicit topics instead of disappearing."
       }
+      heading "environments" "Environments and delivery"
       p {
-          text "This follows Snowplow's "
-
-          link
-              "https://docs.snowplow.io/docs/api-reference/loaders-storage-targets/bigquery-loader/"
-              "BigQuery loading architecture"
+          text "Pulumi ESC is the configuration boundary between shared infrastructure and an application. The "
+          link "https://www.pulumi.com/docs/esc/providers/pulumi-stacks/" "pulumi-stacks provider"
 
           text
-              ": collection and validation happen as a stream, while BigQuery becomes the durable analytical store. Separate Kubernetes service accounts give the collector, enricher, and loader only the Pub/Sub or BigQuery access each component requires."
+              " opens outputs at runtime, the GCP login provider exchanges OIDC identity for a short-lived token, and the environment maps only the required values into files, environment variables, and Pulumi configuration. An abridged application environment shows the complete flow:"
       }
-      heading "environments" "Pulumi ESC as the configuration layer"
+      codeBlock "yaml" escExample
       paragraph
-          "Infrastructure outputs are useful only when downstream stacks can consume them safely. The environments repository defines Pulumi ESC environments as infrastructure code and composes the platform into product-specific views. Shared fragments provide Cloudflare and platform values; product environments add their own identity, secrets, namespace, and application configuration."
+          "The application pipeline does not need a copied registry address, cluster endpoint, kubeconfig, namespace, or Seq endpoint. It opens the environment and receives a coherent snapshot from the stacks that own those values. Secret Manager values use the same pattern and remain secret as they pass through ESC and Pulumi."
       paragraph
-          "An environment can open outputs from the identity and infrastructure stacks, exchange its OIDC identity for a short-lived Google token, retrieve selected Secret Manager values, and construct files such as a kubeconfig. It then exposes only the Pulumi configuration and environment variables needed by the target stack."
-      paragraph
-          "This removes a large class of repository secrets and copied configuration. A product pipeline does not need to know the cluster endpoint, registry location, database address, Cloudflare account identifiers, or runtime secret values in advance. It opens its environment and receives a coherent snapshot assembled from the stacks that own those values. Secret values remain marked secret as they move through ESC and Pulumi."
-      paragraph
-          "The environment graph also documents dependency order. Identity outputs feed the platform environment; platform outputs feed product environments; product stacks consume those environments. When a shared output changes, previews show the effect where it will be used rather than relying on a person to update several independent configuration files."
-      heading "delivery" "Application delivery"
-      paragraph
-          "Application repositories own their final deployment layer at a high level. A typical stack builds a container, pushes it to Artifact Registry, deploys it to the assigned namespace, creates a ClusterIP service, and connects the appropriate Cloudflare hostname. Applications can add product-specific storage, customer identity clients, WAF rules, or scheduled workloads without placing those resources in the shared platform project."
-      paragraph
-          "The platform supplies boundaries and capabilities rather than one universal application chart. That keeps deployment code close to the application version it runs. It also means a product change can update its image and Kubernetes resources without previewing unrelated shared databases, IAM grants, or cluster services."
-      paragraph
-          "Pull requests run application tests and a Pulumi preview. After merge, GitHub Actions authenticates to Pulumi, opens the stack's ESC environment, builds the reviewed source, and performs the update. Health probes gate the Kubernetes rollout, and applications can run browser tests or API checks against the deployed service before the workflow is considered complete."
-      p {
-          text "I normally do not run "
-          inlineCode "pulumi up"
-
-          text
-              " from my workstation. Local checks and previews are useful, but the main-branch workflow is the consistent deployment path. It creates an audit trail linking source, preview, review, update, and post-deployment evidence."
-      }
-      heading "operations" "Operating the platform"
-      paragraph
-          "Most routine operation is deliberately uneventful. GKE and the managed data services handle infrastructure health, Kubernetes restarts unhealthy containers, Cloudflare maintains edge connectivity, and deployment workflows reconcile code with the live resources. My work is usually reviewing a preview, inspecting Seq, checking a rollout, or tracing a failed event through Pub/Sub and BigQuery."
-      paragraph
-          "Changes to shared resources move in dependency order. Identity changes land before infrastructure that consumes a new principal. Infrastructure outputs land before environments reference them. Environment changes land before an application expects the new configuration. Pull request previews make that sequence visible and keep a single large update from hiding several independent assumptions."
-      paragraph
-          "Protected resources require extra care. For example, removing a protected database or secret is intentionally a multi-step process: first change the protection setting and deploy that state, then remove the resource in a later reviewed update. The inconvenience is useful because it prevents a routine refactor from becoming an immediate destructive operation."
-      paragraph
-          "The source of truth is the deployed TypeScript and ESC configuration plus the CI workflows that apply it. Architecture articles and READMEs are explanations, not executable truth, so they need to be kept current as the platform changes."
+          "Pull requests run tests and a Pulumi preview. After merge, GitHub Actions authenticates to Pulumi, opens the ESC environment, builds the reviewed image, and performs the update. Kubernetes readiness gates the rollout, and product repositories can run browser or API checks against the deployed service. I use local previews for review, but the main-branch workflow—not a workstation running pulumi up—is the normal production path."
       heading "tradeoffs" "Intentional tradeoffs"
       paragraph
-          "This platform optimizes for a solo operator running several real services, not for zero downtime under every regional failure. A zonal GKE cluster and Cloud SQL instance can both be unavailable during a zone-level incident. BASIC Redis has no replica to promote. A shared cluster and database instance also create more shared blast radius than fully independent product platforms."
+          "This platform optimizes for one operator running several real services, not for zero downtime through every regional failure. A shared zonal cluster and database instance have more common blast radius than independent regional platforms. Cloudflare, Google Cloud, Pulumi, and Kubernetes are also deliberate dependencies rather than interchangeable abstractions."
       paragraph
-          "I accept those risks because regional clusters, highly available Redis, and separate database instances for every small product would materially increase the monthly baseline and operational surface. Durable data receives backups, point-in-time recovery, private networking, and deletion protection. Recoverable services are recreated from Pulumi. Applications declare health checks and resource bounds. That is the reliability level the current workloads justify."
-      paragraph
-          "The architecture also depends heavily on Google Cloud, Cloudflare, Pulumi, and Kubernetes. That is intentional. Portability is less valuable to me than having one coherent system with managed operations, explicit identity, private networking, and repeatable delivery. The source code describes how the pieces fit together, but I am not trying to make every service interchangeable."
-      paragraph
-          "The measure of success is straightforward: I can add an application by defining its identity and namespace, composing an environment, and deploying a product-owned stack. It receives secure configuration, private data access, logs, analytics, and an edge route without rebuilding the platform. That is enough infrastructure to support the work while remaining small enough for one person to understand." ]
+          "I accept those constraints because the alternative would materially increase baseline cost and operational work. Durable data receives stronger protection; recoverable services are recreated from code. The result is enough infrastructure to add an application with identity, private data access, logs, analytics, and an edge route, while remaining small enough for one person to understand."
+      script { _src (Asset.fingerprinted "/scripts/mermaid.11.16.0.min.js") }
+      script {
+          js
+              "window.renderMermaid=async function(el){const nodes=el?.matches?.('.mermaid')?[el]:Array.from(el?.querySelectorAll?.('.mermaid')??[]);if(!window.mermaid||nodes.length===0)return;for(const node of nodes){node.dataset.mermaidSource=node.dataset.mermaidSource||node.textContent.trim();node.textContent=node.dataset.mermaidSource;node.removeAttribute('data-processed')}window.mermaid.initialize({startOnLoad:false,theme:document.documentElement.classList.contains('dark')?'dark':'neutral',securityLevel:'strict'});await window.mermaid.run({nodes})};void window.renderMermaid(document)"
+      } ]
 
 let article = Article.create metadata (ArticlePage.primary metadata content)

@@ -59,7 +59,15 @@ let articleCatalogTests =
                     "Cloudflare Tunnel"
                     "Seq"
                     "Snowplow"
-                    "zonal" ] do
+                    "zonal"
+                    "Meier Made Platform"
+                    "platform-identity/"
+                    "application/"
+                    "privateClusterConfig"
+                    "fn::open::pulumi-stacks"
+                    "new k8s.apps.v1.Deployment"
+                    "mermaid.11.16.0.min.js"
+                    "accTitle: Meier Made platform system context" ] do
                   Expect.stringContains infrastructure topic $"Expected infrastructure content for {topic}"
 
               for obsoleteTopic in [ "Raspberry Pi"; "Penpot"; "Amazon Web Services" ] do

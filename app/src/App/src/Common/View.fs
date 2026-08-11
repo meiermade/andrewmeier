@@ -359,6 +359,6 @@ type Document =
                         }
                     }
                 }
-                script { js "function getInitialTheme(){return localStorage.getItem('theme')||'system'};function applyTheme(t){var d=document.documentElement,isDark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);d.classList.toggle('dark',isDark)};function setTheme(t){localStorage.setItem('theme',t);applyTheme(t)}" }
+                script { js "function getInitialTheme(){return localStorage.getItem('theme')||'system'};function applyTheme(t){var d=document.documentElement,isDark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);d.classList.toggle('dark',isDark)};function setTheme(t){localStorage.setItem('theme',t);applyTheme(t);void window.renderMermaid?.(document)}" }
             }
         }
