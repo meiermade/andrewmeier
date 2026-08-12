@@ -33,6 +33,13 @@ test('homepage renders recent articles', async ({ page }) => {
   await expect(page.getByRole('progressbar', { name: 'Article reading progress' })).toBeHidden()
 })
 
+test('personal infrastructure diagrams render after client-side navigation', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  await page.getByRole('link', { name: 'Personal Infrastructure', exact: true }).click()
+  await expect(page).toHaveURL('/articles/personal-infrastructure')
+  await expect(page.locator('.article-mermaid svg')).toHaveCount(3)
+})
+
 test('articles index renders and opens a source-controlled article', async ({ page }) => {
   const response = await page.goto('/articles', { waitUntil: 'domcontentloaded' })
 
