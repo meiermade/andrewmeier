@@ -70,6 +70,8 @@ module ArticleCard =
 module ArticlePage =
     let primary (metadata: ArticleMetadata) (content: HtmlElement list) =
         let page = div {
+            _data ("article-page", "")
+
             div {
                 _class "bg-cover bg-no-repeat bg-center bg-blend-overlay bg-gray-800"
 
@@ -114,6 +116,11 @@ module ArticlePage =
 
             script { _src (Asset.fingerprinted "/scripts/prism.1.29.0.js") }
             script { js "function highlightCode(el){if(el?.querySelectorAll)Prism.highlightAllUnder(el)}" }
+
+            script {
+                js
+                    "window.updateArticleProgress=window.updateArticleProgress||function(){var progress=document.getElementById('article-scroll-progress'),article=document.querySelector('[data-article-page] article');if(!progress||!article)return;var articleBottom=article.getBoundingClientRect().bottom+window.scrollY,maxScroll=Math.max(articleBottom-window.innerHeight,1),value=Math.min(Math.max(window.scrollY/maxScroll,0),1);progress.style.transform='scaleX('+value+')';progress.setAttribute('aria-valuenow',String(Math.round(value*100)))};window.scheduleArticleProgress=window.scheduleArticleProgress||function(){if(window.__articleProgressFrame)return;window.__articleProgressFrame=requestAnimationFrame(function(){window.__articleProgressFrame=0;window.updateArticleProgress()})};window.initializeArticleProgress=window.initializeArticleProgress||function(){if(!window.__articleProgressBound){window.__articleProgressBound=true;window.addEventListener('scroll',window.scheduleArticleProgress,{passive:true});window.addEventListener('resize',window.scheduleArticleProgress)}window.updateArticleProgress()};window.initializeArticleProgress()"
+            }
         }
 
         Page.primary page

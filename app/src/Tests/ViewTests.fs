@@ -40,6 +40,12 @@ let tests =
                 Expect.isFalse (navigation.Contains "Services") "Expected company services to leave personal navigation"
                 Expect.isFalse (navigation.Contains "Projects") "Expected company projects to leave personal navigation"
                 Expect.isFalse (profile.Contains "Currently working at") "Expected current-employer claim to be removed"
+                Expect.stringContains profile "engineer and the owner" "Expected current role"
+                Expect.stringContains profile "Meier Made, LLC" "Expected company ownership"
+                Expect.stringContains profile "https://meiermade.com" "Expected company profile link"
+                Expect.stringContains profile "St. Louis, Missouri" "Expected hometown"
+                Expect.stringContains profile "New York City" "Expected current city"
+                Expect.stringContains profile "The opinions shared here are my own." "Expected personal-opinions disclaimer"
             }
 
             test "uses Datastar navigation disclosures without emulated menus" {

@@ -276,7 +276,8 @@ module TopNav =
     let primary =
         nav {
             _id "top-nav"
-            _class "relative bg-gray-100 py-2 px-4 border-b border-gray-300 dark:bg-gray-900 dark:border-gray-700"
+            _class
+                "relative h-14 bg-gray-100/80 py-1.5 px-4 border-b border-gray-300/80 backdrop-blur-md dark:bg-gray-900/80 dark:border-gray-700/80"
             _dataSignals "{theme: 'system'}"
             _dataInit "$theme = getInitialTheme(); applyTheme($theme)"
             div {
@@ -290,6 +291,17 @@ module TopNav =
                 }
                 themeToggle
                 mobileDropdown
+            }
+            div {
+                _id "article-scroll-progress"
+                _role "progressbar"
+                _ariaLabel "Article reading progress"
+                _attr ("aria-valuemin", "0")
+                _attr ("aria-valuemax", "100")
+                _attr ("aria-valuenow", "0")
+                _class
+                    "article-scroll-progress pointer-events-none absolute inset-x-0 -bottom-px h-0.5 origin-left bg-emerald-600 dark:bg-emerald-400"
+                _style "transform:scaleX(0)"
             }
         }
 

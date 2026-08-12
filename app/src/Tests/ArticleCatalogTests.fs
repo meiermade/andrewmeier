@@ -54,27 +54,114 @@ let articleCatalogTests =
               Expect.stringContains semanticKernel "Semantic Kernel SDK" "Expected Semantic Kernel content"
 
               for topic in
-                  [ "Google Kubernetes Engine"
+                  [ "personal applications"
+                    "andymeier.dev"
+                    "Google Kubernetes Engine"
+                    "Google Workspace"
+                    "GKE free tier"
+                    "$74.40"
+                    "Namespaces, Deployments, and Services"
+                    "Cloud Logging"
+                    "Cloud Monitoring"
+                    "Cloudflare Access"
+                    "outbound-only"
                     "Pulumi ESC"
-                    "Cloudflare Tunnel"
+                    "IntelliSense"
+                    "Secret Manager"
+                    "OpenID Connect"
+                    "GitHub Actions"
+                    "GitHub CLI"
+                    "Benji"
+                    "Minnie"
+                    "StatefulSet"
+                    "OpenTelemetry"
                     "Seq"
+                    "one event stream"
+                    "HTTP API"
                     "Snowplow"
-                    "zonal"
-                    "Meier Made Platform"
-                    "platform-identity/"
-                    "application/"
+                    "Pub/Sub"
+                    "BigQuery"
                     "privateClusterConfig"
-                    "fn::open::pulumi-stacks"
+                    "fn::open::gcp-secrets"
                     "new k8s.apps.v1.Deployment"
                     "mermaid.11.16.0.min.js"
                     "flowchart TB"
-                    "accTitle: Meier Made platform system context" ] do
+                    "accTitle: Personal infrastructure system context"
+                    "accTitle: Personal infrastructure runtime"
+                    "accTitle: Personal infrastructure deployment"
+                    "Personal applications"
+                    "strong APIs"
+                    "agent-driven workflow"
+                    "System context"
+                    "Runtime"
+                    "Deployment"
+                    "same discipline I bring to client infrastructure"
+                    "proving ground for new tools and architectural patterns"
+                    "experience here informs those decisions"
+                    "https://pi.dev/"
+                    "https://assets.meiermade.com/andymeier/articles/personal-infrastructure/system-context-dec390cb7efb.webp"
+                    "Google Workspace account"
+                    "narrowly scoped viewer roles"
+                    "Routes website traffic"
+                    "Routes agent traffic"
+                    "Opens protected interface" ] do
                   Expect.stringContains infrastructure topic $"Expected infrastructure content for {topic}"
 
-              for obsoleteTopic in [ "Raspberry Pi"; "Penpot"; "Amazon Web Services" ] do
+              for excludedTopic in
+                  [ "Meier Made Platform"
+                    "PostgreSQL"
+                    "Cloud SQL"
+                    "Auth0"
+                    "Dagster"
+                    "Airbyte"
+                    "Metabase"
+                    "Raspberry Pi"
+                    "Penpot"
+                    "Amazon Web Services"
+                    "Redis"
+                    "Memorystore" ] do
                   Expect.isFalse
-                      (infrastructure.Contains obsoleteTopic)
-                      $"Expected obsolete infrastructure content for {obsoleteTopic} to be removed"
+                      (infrastructure.Contains excludedTopic)
+                      $"Expected out-of-scope infrastructure content for {excludedTopic} to be removed"
+
+              Expect.isFalse
+                  (infrastructure.Contains "subgraph personal")
+                  "Expected runtime relationships to terminate at containers rather than a decorative boundary"
+
+              for metaLanguage in
+                  [ "the example I will follow through this article"
+                    "The runtime view names"
+                    "The deployment view makes"
+                    "simplest representative workload"
+                    "better explanation for the platform"
+                    "Identifiers and account details are intentionally omitted"
+                    "A VPN would still be appropriate"
+                    "The application repository has a deliberately ordinary shape"
+                    "Kubernetes often gets a bad reputation"
+                    "The point is not to turn infrastructure"
+                    "The goal is not to use the fewest technologies" ] do
+                  Expect.isFalse
+                      (infrastructure.Contains metaLanguage)
+                      $"Expected meta language for {metaLanguage} to be removed"
+
+              Expect.isLessThan
+                  (infrastructure.IndexOf "How it is organized")
+                  (infrastructure.IndexOf "Personal applications and agents")
+                  "Expected infrastructure ownership to be explained before individual technologies"
+
+              for applicationDetail in
+                  [ "href=\"#example\""
+                    "https://github.com/meiermade/andymeier"
+                    "source for andymeier.dev"
+                    "The site keeps article content in source control"
+                    "I keep application code, infrastructure, tests, and workflows together" ] do
+                  Expect.isFalse
+                      (infrastructure.Contains applicationDetail)
+                      $"Expected the andymeier.dev application section to omit {applicationDetail}"
+
+              Expect.isFalse
+                  (infrastructure.Contains "https://github.com/meiermade/agent")
+                  "Expected the private agent repository not to be linked"
 
               for tool in
                   [ "Homebrew"

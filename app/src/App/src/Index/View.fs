@@ -11,12 +11,15 @@ open type Datastar
 let aboutMe =
     p {
         _class "mt-4 text-lg text-gray-600 dark:text-gray-400"
-        "Engineer working in finance, accounting, and capital markets."
+        text "I’m an engineer and the owner of "
+        a { _class "underline hover:text-emerald-600 dark:hover:text-emerald-400"; _href "https://meiermade.com"; text "Meier Made, LLC" }
+        text ". Originally from St. Louis, Missouri, I now live in New York City. The opinions shared here are my own."
     }
 
 let homePage (recentArticles:Article list) =
     let content =
         div {
+            _data ("home-page", "")
             _class "py-10 mx-auto max-w-5xl px-4"
             div {
                 _class "grid gap-4 grid-cols-1 md:grid-cols-2"
