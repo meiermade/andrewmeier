@@ -1,8 +1,15 @@
 import { expect, test } from '@playwright/test'
 
 const isRemote = process.env.E2E_START_LOCAL === '0'
+const testImage = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
 
 test.beforeEach(async ({ page }) => {
+  if (!isRemote) {
+    await page.route('https://assets.meiermade.com/andymeier/articles/**', route =>
+      route.fulfill({ contentType: 'image/png', body: testImage }),
+    )
+  }
+
   await page.addInitScript(() => localStorage.setItem('analytics-consent', 'declined'))
 })
 
@@ -15,45 +22,148 @@ test('homepage renders recent articles', async ({ page }) => {
   expect(response?.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin')
   expect(response?.headers()['content-security-policy']).toContain("frame-ancestors 'none'")
   await expect(page.getByRole('heading', { name: 'Andy Meier', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Meier Made, LLC', exact: true })).toHaveAttribute('href', 'https://meiermade.com')
+  await expect(page.getByText('Originally from St. Louis, Missouri', { exact: false })).toBeVisible()
+  await expect(page.getByText('The opinions shared here are my own.', { exact: false })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Recent articles', exact: true })).toBeVisible()
+  await expect(page.locator('#top-nav')).toHaveCSS('position', 'sticky')
+  await expect(page.locator('#top-nav')).toHaveCSS('top', '0px')
+  await expect(page.locator('#top-nav')).toHaveCSS('backdrop-filter', 'blur(12px)')
+  await expect.poll(async () => page.locator('#top-nav').evaluate(nav => getComputedStyle(nav).backgroundColor)).toContain('/')
+  await expect(page.getByRole('progressbar', { name: 'Article reading progress' })).toBeHidden()
 })
 
-test('articles index renders and opens a published article when available', async ({ page }) => {
+test('articles index renders and opens a source-controlled article', async ({ page }) => {
   const response = await page.goto('/articles', { waitUntil: 'domcontentloaded' })
 
   expect(response?.status()).toBe(200)
   await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
 
-  const articleLinks = page.locator('#page a[href^="/articles/"]')
-  if (await articleLinks.count()) {
-    const href = await articleLinks.first().getAttribute('href')
-    expect(href).toBeTruthy()
-    const articleResponse = await page.goto(href!, { waitUntil: 'domcontentloaded' })
-    expect(articleResponse?.status()).toBe(200)
-    await expect(page.locator('article')).toBeVisible()
-  } else {
-    await expect(page.getByRole('heading', { name: 'No articles found', exact: true })).toBeVisible()
+  const articleResponse = await page.goto('/articles/fsharp-semantic-kernel', { waitUntil: 'domcontentloaded' })
+  expect(articleResponse?.status()).toBe(200)
+  await expect(page.locator('article')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
+  await expect(page.getByText('Microsoft’s Semantic Kernel SDK', { exact: false }).first()).toBeVisible()
+})
+
+test('development environment article presents the current setup', async ({ page }) => {
+  const response = await page.goto('/articles/dev-env', { waitUntil: 'domcontentloaded' })
+
+  expect(response?.status()).toBe(200)
+  await expect(page.getByRole('heading', { name: 'Development Environment', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pi coding agent', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'JetBrains IDEs', exact: true })).toBeVisible()
+  await expect(page.getByText('Windows Subsystem for Linux', { exact: false })).toHaveCount(0)
+  await expect(page.locator('article > div')).toHaveCSS('padding-bottom', '32px')
+})
+
+test('article pages keep the top navigation visible and track reading progress', async ({ page }) => {
+  await page.goto('/articles', { waitUntil: 'domcontentloaded' })
+  await page.getByRole('link', { name: 'Personal Infrastructure', exact: true }).click()
+  await expect(page).toHaveURL('/articles/personal-infrastructure')
+
+  const nav = page.locator('#top-nav')
+  const progress = page.getByRole('progressbar', { name: 'Article reading progress' })
+
+  await expect(nav).toHaveCSS('position', 'sticky')
+  await expect(nav).toHaveCSS('top', '0px')
+  await expect(nav).toHaveCSS('height', '56px')
+  await expect(progress).toHaveCSS('display', 'block')
+  await expect(progress).toHaveAttribute('aria-valuenow', '0')
+
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight * 0.4))
+  await expect.poll(async () => Number(await progress.getAttribute('aria-valuenow'))).toBeGreaterThan(0)
+  await expect(progress).toBeVisible()
+  await expect.poll(async () => nav.evaluate(element => Math.round(element.getBoundingClientRect().top))).toBe(0)
+
+  await page.locator('article').evaluate(article => {
+    const articleBottom = article.getBoundingClientRect().bottom + window.scrollY
+    window.scrollTo(0, articleBottom - window.innerHeight)
+  })
+  await expect(progress).toHaveAttribute('aria-valuenow', '100')
+
+  await page.locator('#nav-articles').click()
+  await expect(page).toHaveURL('/articles')
+  await expect(nav).toHaveCSS('position', 'sticky')
+  await expect(nav).toHaveCSS('top', '0px')
+  await expect(progress).toBeHidden()
+})
+
+test('article search and source-controlled detail content are deterministic', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('theme', 'light'))
+  await page.goto('/articles?search=semantic', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Clear search' })).toBeVisible()
+
+  const response = await page.goto('/articles/personal-infrastructure', { waitUntil: 'domcontentloaded' })
+  expect(response?.status()).toBe(200)
+  await expect(page.getByRole('heading', { name: 'Personal Infrastructure', exact: true }).first()).toBeVisible()
+  await expect(page.getByText('DevOps', { exact: true }).first()).toBeVisible()
+
+  await expect(page.getByRole('heading', { name: 'Architecture at a glance', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'System context', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Runtime', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Deployment', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Why Google Cloud', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Kubernetes without platform engineering', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Personal applications and agents', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cloudflare for networking and access', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Observability with Seq', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pulumi and environments', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'GitHub for delivery', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'andymeier.dev', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'How it is organized', exact: true })).toBeVisible()
+  await expect(page.getByText('The site keeps article content in source control', { exact: false })).toHaveCount(0)
+  await expect(page.getByText('Benji and Minnie are my two long-running AI agents', { exact: false })).toBeVisible()
+  await expect(page.getByText('logs and traces in one event stream', { exact: false })).toBeVisible()
+  await expect(page.getByText('small, coherent set of tools with strong APIs', { exact: false })).toBeVisible()
+  await expect(page.getByText('narrowly scoped viewer roles', { exact: false })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Pi coding agent', exact: true })).toHaveAttribute('href', 'https://pi.dev/')
+  await expect(page.getByRole('link', { name: 'source for andymeier.dev', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'HTTP API', exact: true })).toHaveAttribute('href', 'https://datalust.co/docs/using-the-http-api')
+  await expect(page.locator('a[href="https://github.com/meiermade/agent"]')).toHaveCount(0)
+
+  const diagrams = [
+    { locator: page.locator('[data-system-context]'), title: 'Personal infrastructure system context' },
+    { locator: page.locator('[data-container-view]'), title: 'Personal infrastructure runtime' },
+    { locator: page.locator('[data-deployment-view]'), title: 'Personal infrastructure deployment' },
+  ]
+
+  for (const diagram of diagrams) {
+    await expect(diagram.locator.locator('svg')).toBeVisible()
+    await expect(diagram.locator.locator('svg title')).toHaveText(diagram.title)
+    await expect(diagram.locator.locator('svg desc')).not.toBeEmpty()
+    await expect(diagram.locator.locator('svg')).not.toHaveAttribute('aria-roledescription', 'error')
+  }
+
+  await expect(diagrams[0].locator.locator('svg desc')).toContainText('GitHub Actions, Pulumi Cloud, Google Cloud, Cloudflare, and Google Workspace')
+
+  const [, , diagramWidth, diagramHeight] = (await diagrams[0].locator.locator('svg').getAttribute('viewBox'))!.split(' ').map(Number)
+  expect(diagramHeight).toBeGreaterThan(diagramWidth)
+
+  const lightDiagrams = await Promise.all(diagrams.map(diagram => diagram.locator.locator('svg').innerHTML()))
+  await page.getByRole('button', { name: 'Choose theme' }).click()
+  await page.getByRole('button', { name: 'Dark' }).click()
+  await expect(page.locator('html')).toHaveClass(/dark/)
+  await expect.poll(async () => {
+    const darkDiagrams = await Promise.all(diagrams.map(diagram => diagram.locator.locator('svg').innerHTML()))
+    const haveErrors = await Promise.all(diagrams.map(diagram => diagram.locator.locator('svg').getAttribute('aria-roledescription')))
+    return haveErrors.every(role => role !== 'error') && darkDiagrams.every((svg, index) => svg !== lightDiagrams[index])
+  }).toBe(true)
+
+  for (const diagram of diagrams) {
+    await expect(diagram.locator.locator('svg title')).toHaveText(diagram.title)
+  }
+
+  for (const excludedTopic of ['Meier Made Platform', 'PostgreSQL', 'Cloud SQL', 'Auth0', 'Dagster', 'Airbyte', 'Metabase', 'Raspberry Pi', 'Penpot', 'Redis', 'Memorystore']) {
+    await expect(page.getByText(excludedTopic, { exact: false })).toHaveCount(0)
   }
 })
 
-test('local article search and detail routes use MockNotion fixtures', async ({ page }) => {
-  test.skip(isRemote, 'Published production content is not a deterministic fixture.')
-
-  await page.goto('/articles?search=engineering', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('heading', { name: 'Mock engineering notes', exact: true })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'Clear search' })).toBeVisible()
-
-  const response = await page.goto('/articles/mock-finance-systems', { waitUntil: 'domcontentloaded' })
-  expect(response?.status()).toBe(200)
-  await expect(page.getByRole('heading', { name: 'Mock finance systems', exact: true }).first()).toBeVisible()
-  await expect(page.getByText('Finance', { exact: true }).first()).toBeVisible()
-})
-
 test('article filter disclosures support native keyboard selection', async ({ page }) => {
-  test.skip(isRemote, 'Published production filters are not deterministic fixtures.')
-
   for (const filter of [
-    { name: 'tag', ariaLabel: 'Tag filter', value: 'Engineering' },
+    { name: 'tag', ariaLabel: 'Tag filter', value: '.NET' },
     { name: 'year', ariaLabel: 'Published year filter', value: '2026' },
   ]) {
     await page.goto('/articles', { waitUntil: 'domcontentloaded' })
@@ -69,6 +179,9 @@ test('article filter disclosures support native keyboard selection', async ({ pa
     await expect(panel).toBeVisible()
     await expect(button).toHaveAttribute('aria-expanded', 'true')
     await page.keyboard.press('Tab')
+    if (await panel.evaluate(element => element === document.activeElement)) {
+      await page.keyboard.press('Tab')
+    }
     await expect(option).toBeFocused()
 
     await page.keyboard.press('Escape')
@@ -78,6 +191,9 @@ test('article filter disclosures support native keyboard selection', async ({ pa
     await button.press('Space')
     await expect(panel).toBeVisible()
     await page.keyboard.press('Tab')
+    if (await panel.evaluate(element => element === document.activeElement)) {
+      await page.keyboard.press('Tab')
+    }
     await expect(option).toBeFocused()
     await page.keyboard.press('Enter')
 
@@ -132,4 +248,23 @@ test('articles remain usable at a mobile viewport', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  for (const article of [
+    { path: '/articles/personal-infrastructure', title: 'Personal Infrastructure' },
+    { path: '/articles/dev-env', title: 'Development Environment' },
+  ]) {
+    await page.goto(article.path, { waitUntil: 'domcontentloaded' })
+    await expect(page.getByRole('heading', { name: article.title, exact: true })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+    if (article.path === '/articles/personal-infrastructure') {
+      for (const selector of ['[data-system-context]', '[data-container-view]', '[data-deployment-view]']) {
+        const diagram = page.locator(selector)
+        await expect(diagram.locator('svg')).toBeVisible()
+        await expect(diagram.getByText('Scroll horizontally to see the complete diagram.')).toBeVisible()
+        expect(await diagram.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+        expect(await diagram.evaluate(element => element.scrollLeft > 0)).toBe(true)
+      }
+    }
+  }
 })

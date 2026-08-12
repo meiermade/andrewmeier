@@ -2,6 +2,7 @@ module App.Articles.Handler
 
 open App.Infrastructure
 open App.ServiceRegistry
+open App.Articles
 open App.Articles.View
 open App.Common.Handler
 open App.Common.View
@@ -23,8 +24,8 @@ let private filtersFromRequest (ctx:HttpContext) =
           | true, year -> Some year
           | false, _ -> None) }
 
-let filterArticles (filters:FilterState) (articles:Domain.Article.Article list) =
-    let matchesSearch (article:Domain.Article.Article) =
+let filterArticles (filters:FilterState) (articles:Article list) =
+    let matchesSearch (article:Article) =
         filters.search
         |> Option.forall (fun query ->
             let query = query.Trim()
@@ -32,12 +33,12 @@ let filterArticles (filters:FilterState) (articles:Domain.Article.Article list) 
             || article.summary.Contains(query, StringComparison.OrdinalIgnoreCase)
             || (article.tags |> Array.exists (fun tag -> tag.Contains(query, StringComparison.OrdinalIgnoreCase))))
 
-    let matchesTag (article:Domain.Article.Article) =
+    let matchesTag (article:Article) =
         filters.tag
         |> Option.forall (fun selectedTag ->
             article.tags |> Array.exists (fun tag -> String.Equals(tag, selectedTag, StringComparison.OrdinalIgnoreCase)))
 
-    let matchesYear (article:Domain.Article.Article) =
+    let matchesYear (article:Article) =
         filters.publishedYear
         |> Option.forall (fun year -> article.createdAt.Year = year)
 
@@ -53,7 +54,7 @@ let private getArticlesPage (services:Services) : HttpHandler =
         if not ctx.IsDatastar && requestedUrl <> canonicalUrl then
             return! redirectTo false canonicalUrl next ctx
         else
-            let! allArticles = services.article.listArticles ()
+            let allArticles = Catalog.all
             let page =
                 { articles = filterArticles filters allArticles
                   filters = filters
@@ -74,9 +75,9 @@ let private getArticlesPage (services:Services) : HttpHandler =
 let private getArticlePage (services:Services) (id:string) : HttpHandler =
     fun next ctx -> task {
         use _span = services.telemetry.startActiveSpan "app.articles.get_article_page"
-        match! services.article.tryGetArticle id with
+        match Catalog.tryFind id with
         | Some article ->
-            let page = articlePage article
+            let page = article.page
             let url = SiteUrl.article article.permalink
 
             if ctx.IsDatastar then

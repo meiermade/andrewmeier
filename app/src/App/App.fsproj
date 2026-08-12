@@ -10,17 +10,21 @@
     <Content Include="paket.references" />
     <Compile Include="src/Infrastructure.fs" />
     <Compile Include="src/Config.fs" />
+    <Compile Include="src/Telemetry.fs" />
     <Compile Include="src/Services.fs" />
+    <Compile Include="src/Articles/Article.fs" />
     <Compile Include="src/Common/View.fs" />
     <Compile Include="src/Common/Handler.fs" />
+    <Compile Include="src/Articles/Shared.fs" />
+    <Compile Include="src/Articles/Posts/FSharpSemanticKernel.fs" />
+    <Compile Include="src/Articles/Posts/PersonalInfrastructure.fs" />
+    <Compile Include="src/Articles/Posts/DevelopmentEnvironment.fs" />
+    <Compile Include="src/Articles/Catalog.fs" />
     <Compile Include="src/Articles/View.fs" />
     <Compile Include="src/Articles/Handler.fs" />
     <Compile Include="src/Index/View.fs" />
     <Compile Include="src/Index/Handler.fs" />
     <Compile Include="src/Program.fs" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Domain\Domain.fsproj" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

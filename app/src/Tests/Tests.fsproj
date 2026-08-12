@@ -8,19 +8,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include="paket.references" />
-    <Compile Include="ArticleTests.fs" />
-    <Compile Include="ArticleServiceTests.fs" />
     <Compile Include="ArticleFilterTests.fs" />
-    <Compile Include="NotionParseTests.fs" />
-    <Compile Include="NotionPageTests.fs" />
-    <Compile Include="NotionServiceTests.fs" />
-    <Compile Include="MockNotionTests.fs" />
+    <Compile Include="ArticleCatalogTests.fs" />
     <Compile Include="ViewTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\App\App.fsproj" />
-    <ProjectReference Include="..\MockNotion\MockNotion.fsproj" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

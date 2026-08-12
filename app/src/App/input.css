@@ -4,8 +4,44 @@
 @plugin "@tailwindcss/typography";
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Inline code: monospace fonts render larger at the same font-size,
-   so scale down to visually match surrounding body text. */
-.prose :where(code):not(:where(pre *)) {
+.article-scroll-progress {
+    display: none;
+}
+
+#top-nav {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+body:has([data-article-page]) .article-scroll-progress {
+    display: block;
+}
+
+/* Monospace fonts render larger at the same font-size,
+   so scale code down to visually match surrounding body text. */
+.prose code[class*="language-"] {
     font-size: 0.875em;
+}
+
+.prose :not(pre) > code[class*="language-"] {
+    overflow-wrap: anywhere;
+}
+
+.article-mermaid svg {
+    min-width: 40rem;
+    max-width: none;
+    height: auto;
+}
+
+[data-container-view] .article-mermaid svg,
+[data-deployment-view] .article-mermaid svg {
+    min-width: 56rem;
+}
+
+@media (min-width: 768px) {
+    .article-mermaid svg {
+        min-width: 0;
+        max-width: 100%;
+    }
 }

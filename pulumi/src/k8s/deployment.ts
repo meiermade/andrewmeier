@@ -4,23 +4,6 @@ import * as image from '../docker/image'
 import * as config from '../config'
 import * as tunnel from '../cloudflare/tunnel'
 
-let appSecret = new k8s.core.v1.Secret('app', {
-    metadata: {
-        name: 'app',
-        namespace: config.k8sConfig.namespace
-    },
-    immutable: true,
-    stringData: {
-        ASPNETCORE_ENVIRONMENT: 'Production',
-        SERVER_URL: 'http://0.0.0.0:5000',
-        SEQ_ENDPOINT: config.seqConfig.endpoint,
-        SQLITE_PATH: '/data/app.db',
-        NOTION_ARTICLES_DATABASE_ID: config.notionConfig.articlesDatabaseId,
-        NOTION_API_KEY: config.notionConfig.apiKey,
-        GOOGLE_ANALYTICS_MEASUREMENT_ID: config.googleAnalyticsConfig.measurementId
-    }
-}, { provider })
-
 const cloudflaredSecret = new k8s.core.v1.Secret('cloudflared', {
     metadata: {
         name: 'cloudflared',
@@ -66,12 +49,16 @@ const deployment = new k8s.apps.v1.Deployment('app', {
                         image: image.imageRef,
                         securityContext: containerSecurityContext,
                         imagePullPolicy: 'IfNotPresent',
-                        envFrom: [{ secretRef: { name: appSecret.metadata.name } }],
+                        env: [
+                            { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' },
+                            { name: 'SERVER_URL', value: 'http://0.0.0.0:5000' },
+                            { name: 'SEQ_ENDPOINT', value: config.seqConfig.endpoint },
+                            { name: 'GOOGLE_ANALYTICS_MEASUREMENT_ID', value: config.googleAnalyticsConfig.measurementId },
+                        ],
                         resources: {
                             requests: { cpu: '25m', memory: '64Mi' },
                             limits: { cpu: '250m', memory: '256Mi' },
                         },
-                        volumeMounts: [{ name: 'app-data', mountPath: '/data' }],
                         livenessProbe: {
                             httpGet: {
                                 path: '/health',
@@ -108,17 +95,11 @@ const deployment = new k8s.apps.v1.Deployment('app', {
                             periodSeconds: 10
                         }
                     }
-                ],
-                volumes: [
-                    {
-                        name: 'app-data',
-                        emptyDir: {}
-                    }
                 ]
             }
         }
     }
-}, { provider, dependsOn: [appSecret, cloudflaredSecret] })
+}, { provider, dependsOn: cloudflaredSecret })
 
 new k8s.core.v1.Service('app', {
     metadata: {

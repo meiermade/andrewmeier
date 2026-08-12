@@ -1,7 +1,17 @@
 namespace App
 
-open Domain
 open System
+
+module Env =
+    let variable (key:string) =
+        match Environment.GetEnvironmentVariable key with
+        | value when String.IsNullOrEmpty value -> failwith $"Environment variable '{key}' is required"
+        | value -> value
+
+    let variableOrDefault (key:string) (defaultValue:string) =
+        match Environment.GetEnvironmentVariable key with
+        | value when String.IsNullOrEmpty value -> defaultValue
+        | value -> value
 
 type SeqConfig =
     { endpoint:string }
@@ -29,9 +39,7 @@ type Config =
       appName:string
       server:ServerConfig
       seq:SeqConfig
-      googleAnalytics:GoogleAnalyticsConfig
-      sqlite:Sqlite.Config
-      notion:Notion.Config }
+      googleAnalytics:GoogleAnalyticsConfig }
 
 module Config =
     let load () =
@@ -39,6 +47,4 @@ module Config =
           appName = "andymeier"
           server = ServerConfig.load ()
           seq = SeqConfig.load ()
-          googleAnalytics = GoogleAnalyticsConfig.load ()
-          sqlite = Sqlite.Config.load ()
-          notion = Notion.Config.load () }
+          googleAnalytics = GoogleAnalyticsConfig.load () }
