@@ -516,7 +516,10 @@ let private content =
           "Cloudflare, Google Cloud, Pulumi, Kubernetes, and GitHub are deliberate dependencies. Replacing any one of them would require real work. I accept that coupling because each product removes more operational burden than it adds, and because the boundaries between them are still visible: containers, Kubernetes resources, DNS routes, OIDC identities, and TypeScript programs."
       paragraph
           "The result is a small, coherent platform that keeps personal applications inexpensive, private by default, observable, and programmatically deployable. A narrow Kubernetes vocabulary and short-lived identities keep it manageable for one operator."
-      script { _src (Asset.fingerprinted "/scripts/mermaid.11.16.0.min.js") }
+      script {
+          _src (Asset.fingerprinted "/scripts/mermaid.11.16.0.min.js")
+          _onload "window.renderMermaid?.(document)"
+      }
       script {
           js
               "window.renderMermaid=async function(el){const nodes=el?.matches?.('.mermaid')?[el]:Array.from(el?.querySelectorAll?.('.mermaid')??[]);if(!window.mermaid||nodes.length===0)return;for(const node of nodes){node.dataset.mermaidSource=node.dataset.mermaidSource||node.textContent.trim();node.textContent=node.dataset.mermaidSource;node.removeAttribute('data-processed')}window.mermaid.initialize({startOnLoad:false,theme:document.documentElement.classList.contains('dark')?'dark':'neutral',securityLevel:'strict'});await window.mermaid.run({nodes});for(const node of nodes){const scroller=node.parentElement;if(scroller&&scroller.scrollWidth>scroller.clientWidth&&scroller.scrollLeft===0)scroller.scrollLeft=(scroller.scrollWidth-scroller.clientWidth)/2}};void window.renderMermaid(document)"
