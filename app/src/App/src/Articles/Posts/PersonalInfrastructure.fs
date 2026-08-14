@@ -71,42 +71,44 @@ let private systemContextDiagram =
 let private runtimeDiagram =
     """flowchart TB
     accTitle: Personal infrastructure runtime
-    accDescr: Cloudflare routes traffic through outbound cloudflared tunnels directly to andymeier.dev, Benji and Minnie, Seq, and Snowplow. Applications send OpenTelemetry logs and traces to Seq, while Snowplow processes behavioral events with Pub/Sub and BigQuery.
+    accDescr: Cloudflare routes traffic through outbound cloudflared tunnels to public applications, protected interfaces, and a constrained browser telemetry endpoint. Applications and browsers export OpenTelemetry to a Collector, which stores telemetry and named events in ClickHouse for ClickStack.
 
     visitors["Visitors<br/>(People)"]
     operator["Operator<br/>(Person)"]
-    cloudflare["Cloudflare<br/>(External system)<br/>Applies DNS, edge, and Access policy"]
+    cloudflare["Cloudflare<br/>(External system)<br/>Applies DNS, rate limits, and Access policy"]
     workspace["Google Workspace<br/>(External system)<br/>Confirms identity for protected applications"]
     tunnel["Cloudflare connectors<br/>(Container: cloudflared)<br/>Create outbound-only origin tunnels"]
     website["andymeier.dev<br/>(Container: Kubernetes Deployment)<br/>Serves the public personal website"]:::primary
     agents["Benji and Minnie<br/>(Containers: Kubernetes StatefulSets)<br/>Run long-lived personal agents"]:::primary
-    seq[("Seq<br/>(Container: Kubernetes StatefulSet)<br/>Stores and queries logs and traces")]
+    collector["OpenTelemetry Collector<br/>(Container: Kubernetes Deployment)<br/>Validates, redacts, queues, and routes telemetry"]
+    clickhouse[("ClickHouse<br/>(Container: operator-managed cluster)<br/>Stores events, logs, traces, and metrics")]
+    clickstack["ClickStack<br/>(Container: HyperDX application)<br/>Queries correlated telemetry"]
+    seq[("Seq<br/>(Container: Kubernetes StatefulSet)<br/>Receives logs and traces during migration")]
     assets[("Application assets<br/>(Container: Cloud Storage bucket)<br/>Stores immutable public files")]
-    snowplow["Snowplow analytics<br/>(Containers: Collector, Enricher, and Loader)<br/>Processes behavioral events"]
-    eventStreams[("Event streams<br/>(Container: Pub/Sub topics)<br/>Buffer good and bad events")]
-    warehouse[("Analytics warehouse<br/>(Container: BigQuery dataset)<br/>Stores validated events")]
 
     visitors -->|Use public applications| cloudflare
     operator -->|Uses protected applications| cloudflare
     cloudflare -->|Checks protected requests with| workspace
     cloudflare -->|Routes application traffic| tunnel
     cloudflare -->|Serves public assets from| assets
-    cloudflare -->|Routes event collection| snowplow
+    cloudflare -->|Rate-limits consented browser OTLP| tunnel
     tunnel -->|Routes website traffic| website
     tunnel -->|Routes agent traffic| agents
-    tunnel -->|Opens protected interface| seq
-    website -->|Exports OpenTelemetry| seq
-    agents -->|Exports OpenTelemetry| seq
+    tunnel -->|Routes browser telemetry| collector
+    tunnel -->|Opens protected interfaces| clickstack
+    website -->|Exports internal OTLP| collector
+    collector -->|Stores all signals| clickhouse
+    collector -->|Dual-exports logs and traces| seq
+    clickstack -->|Queries| clickhouse
+    agents -->|Export existing telemetry| seq
     website -->|References immutable files| assets
-    snowplow <-->|Consumes and publishes| eventStreams
-    snowplow -->|Loads validated events| warehouse
 
     classDef primary fill:#059669,stroke:#047857,color:#ffffff,stroke-width:3px"""
 
 let private deploymentDiagram =
     """flowchart TB
     accTitle: Personal infrastructure deployment
-    accDescr: GitHub Actions uses Pulumi Cloud and ESC to deploy andymeier.dev, Benji, and Minnie into Google Cloud. Cloudflare connectors, personal applications, Seq, and Snowplow run in a zonal GKE cluster supported by Artifact Registry, Secret Manager, Cloud Storage, Pub/Sub, BigQuery, Cloud Logging, and Cloud Monitoring.
+    accDescr: GitHub Actions uses Pulumi Cloud and ESC to deploy andymeier.dev, Benji, Minnie, and the shared OpenTelemetry and ClickStack platform into Google Cloud. Operator-managed ClickHouse and MongoDB use persistent disks inside the zonal GKE cluster.
 
     github["GitHub Actions<br/>(Deployment environment)"]
     pulumi["Pulumi Cloud and ESC<br/>(Configuration and state)"]
@@ -123,28 +125,30 @@ let private deploymentDiagram =
             website["andymeier.dev<br/>Kubernetes Deployment and Service"]:::primary
             agents["Benji and Minnie<br/>Kubernetes StatefulSets and Services"]:::primary
             seq["Seq<br/>Kubernetes StatefulSet and persistent disk"]
-            snowplow["Snowplow pipeline<br/>Collector, Enricher, and Loader Deployments"]
+            collector["OpenTelemetry Collector<br/>Kubernetes Deployment and persistent queue"]
+            clickstack["ClickStack<br/>HyperDX Deployment"]
+            clickhouse[("ClickHouse and MongoDB<br/>Operator-managed persistent workloads")]
         end
 
         secrets[("Secret Manager<br/>Long-lived application secrets")]
         storage[("Cloud Storage<br/>Immutable application assets")]
-        pubsub[("Pub/Sub<br/>Analytics topics and subscriptions")]
-        bigquery[("BigQuery<br/>Analytics dataset")]
         operations[("Cloud Logging and Monitoring<br/>System logs, metrics, dashboards, and alerts")]
 
         registry -->|Supplies website image| website
         registry -->|Supplies agent image| agents
         connectors -->|Routes website traffic| website
         connectors -->|Routes agent traffic| agents
-        connectors -->|Opens protected interface| seq
-        connectors -->|Routes event collection| snowplow
+        connectors -->|Opens protected interfaces| seq
+        connectors -->|Opens protected interface| clickstack
+        connectors -->|Routes browser OTLP| collector
         website -->|References assets| storage
-        website -->|Exports logs and traces| seq
+        website -->|Exports OpenTelemetry| collector
+        collector -->|Stores telemetry| clickhouse
+        collector -->|Dual-exports logs and traces| seq
+        clickstack -->|Queries telemetry| clickhouse
         agents -->|Reads authorized values| secrets
-        agents -->|Exports logs and traces| seq
+        agents -->|Exports existing telemetry| seq
         runtime -->|Exports system telemetry| operations
-        snowplow -->|Streams events through| pubsub
-        snowplow -->|Loads validated events| bigquery
     end
 
     github -->|Exchanges OIDC identity and runs updates| pulumi
@@ -336,7 +340,7 @@ let private content =
                     "gcp", "Why Google Cloud"
                     "kubernetes", "Kubernetes without platform engineering"
                     "cloudflare", "Cloudflare for networking and access"
-                    "observability", "Observability with Seq"
+                    "observability", "OpenTelemetry and ClickStack"
                     "pulumi", "Pulumi and environments"
                     "github", "GitHub for delivery"
                     "tradeoffs", "Intentional tradeoffs" ] do
@@ -355,11 +359,11 @@ let private content =
       systemContext
       subheading "Runtime"
       paragraph
-          "andymeier.dev serves the public website, while Benji and Minnie run as long-lived AI agents. Cloudflare connectors route accepted requests to those workloads, Seq, or Snowplow. Applications send telemetry to Seq; managed storage and analytics stay outside the request path."
+          "andymeier.dev serves the public website, while Benji and Minnie run as long-lived AI agents. A shared OpenTelemetry Collector separates trusted application telemetry from constrained public browser telemetry, then sends all signals to ClickHouse. Logs and traces are also sent to Seq during the migration period."
       runtimeView
       subheading "Deployment"
       paragraph
-          "Application images live in Artifact Registry. andymeier.dev, Benji, Minnie, Cloudflare connectors, Seq, and Snowplow run in one zonal GKE cluster. Secret Manager, Cloud Storage, Pub/Sub, BigQuery, Cloud Logging, and Cloud Monitoring remain managed Google Cloud services."
+          "Application images live in Artifact Registry. andymeier.dev, Benji, Minnie, Cloudflare connectors, the Collector, ClickStack, ClickHouse, MongoDB, and Seq run in one zonal GKE cluster. Secret Manager, Cloud Storage, persistent disks, Cloud Logging, and Cloud Monitoring remain managed Google Cloud services."
       deploymentView
       heading "organization" "How it is organized"
       paragraph
@@ -436,25 +440,19 @@ let private content =
       }
       paragraph
           "For browser-based applications, this gives me per-application access without exposing origins or granting a device network-wide access."
-      heading "observability" "Observability with Seq"
+      heading "observability" "OpenTelemetry and ClickStack"
       p {
-          text "I use "
-          link "https://datalust.co/docs/getting-started-with-docker" "Seq"
-
-          text
-              " for application observability because it is equally easy to run locally in Docker or deploy as a StatefulSet in Kubernetes. Applications export structured logs and traces through OpenTelemetry, so the instrumentation does not depend on a proprietary logging client. The same configuration sends local development telemetry to a local Seq instance and production telemetry to the private service in the cluster."
+          text "Applications and consented browsers export standard OTLP to an "
+          link "https://opentelemetry.io/docs/collector/" "OpenTelemetry Collector"
+          text ". The internal receiver accepts trusted application logs, traces, and metrics. A separate public HTTP receiver applies strict CORS, request-size limits, Cloudflare rate limits, event-name validation, resource normalization, and attribute allowlists before accepting browser events."
       }
       p {
-          text
-              "Seq puts correlated logs and traces in one event stream. I can move from an error to its surrounding events and trace, then use the "
-
-          link "https://datalust.co/docs/the-seq-query-language" "query language"
-
-          text " in the UI or the "
-          link "https://datalust.co/docs/using-the-http-api" "HTTP API"
-
-          text
-              " from an agent. Benji, Minnie, and coding agents can retrieve recent errors, filter telemetry, and follow traces without reproducing a browser workflow. Cloudflare Access protects the interface."
+          text "Named browser and business occurrences use OpenTelemetry EventRecords. They travel through the Logs signal but remain distinguishable from diagnostic logs through the top-level EventName field. The Collector stores events, logs, traces, and metrics in "
+          link "https://clickhouse.com/docs/use-cases/observability/clickstack/overview" "ClickHouse and ClickStack"
+          text ", while semantic ClickHouse views separate named events from diagnostic records."
+      }
+      p {
+          text "Seq remains connected during migration so I can compare search, correlation, retention, and operator workflows before deciding whether ClickStack fully replaces it. The application instrumentation and browser event contract remain portable because neither depends on a proprietary ingestion protocol. Cloudflare Access protects both operational interfaces."
       }
       p {
           text
@@ -463,7 +461,7 @@ let private content =
           link "https://cloud.google.com/iam/docs/principal-identifiers" "Google Cloud IAM principal"
 
           text
-              ", I can grant narrowly scoped viewer roles for relevant Google Cloud APIs when an agent needs cloud-level context. Seq covers application behavior and correlated traces; Cloud Logging and Cloud Monitoring provide Kubernetes events, system logs, infrastructure metrics, and cluster context. Together, those APIs let an agent gather evidence without receiving deployment permissions."
+              ", I can grant narrowly scoped viewer roles for relevant Google Cloud APIs when an agent needs cloud-level context. ClickStack and Seq expose application behavior and correlated traces during migration; Cloud Logging and Cloud Monitoring provide Kubernetes events, system logs, infrastructure metrics, and cluster context. Together, those APIs let an agent gather evidence without receiving deployment permissions."
       }
       heading "pulumi" "Pulumi and environments"
       p {

@@ -11,3 +11,4 @@ OpenTelemetry.Instrumentation.AspNetCore
 OpenTelemetry.Instrumentation.Http
 OpenTelemetry.Exporter.OpenTelemetryProtocol
 OpenTelemetry.Exporter.Console
+OpenTelemetry.Instrumentation.Runtime

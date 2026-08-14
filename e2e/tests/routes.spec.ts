@@ -116,19 +116,19 @@ test('article search and source-controlled detail content are deterministic', as
   await expect(page.getByRole('heading', { name: 'Kubernetes without platform engineering', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Personal applications and agents', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Cloudflare for networking and access', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Observability with Seq', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'OpenTelemetry and ClickStack', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Pulumi and environments', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'GitHub for delivery', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'andymeier.dev', exact: true })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'How it is organized', exact: true })).toBeVisible()
   await expect(page.getByText('The site keeps article content in source control', { exact: false })).toHaveCount(0)
   await expect(page.getByText('Benji and Minnie are my two long-running AI agents', { exact: false })).toBeVisible()
-  await expect(page.getByText('logs and traces in one event stream', { exact: false })).toBeVisible()
+  await expect(page.getByText('Named browser and business occurrences use OpenTelemetry EventRecords', { exact: false })).toBeVisible()
   await expect(page.getByText('small, coherent set of tools with strong APIs', { exact: false })).toBeVisible()
   await expect(page.getByText('narrowly scoped viewer roles', { exact: false })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Pi coding agent', exact: true })).toHaveAttribute('href', 'https://pi.dev/')
   await expect(page.getByRole('link', { name: 'source for andymeier.dev', exact: true })).toHaveCount(0)
-  await expect(page.getByRole('link', { name: 'HTTP API', exact: true })).toHaveAttribute('href', 'https://datalust.co/docs/using-the-http-api')
+  await expect(page.getByRole('link', { name: 'ClickHouse and ClickStack', exact: true })).toHaveAttribute('href', 'https://clickhouse.com/docs/use-cases/observability/clickstack/overview')
   await expect(page.locator('a[href="https://github.com/meiermade/agent"]')).toHaveCount(0)
 
   const diagrams = [
@@ -239,6 +239,41 @@ test('navigation disclosures use native keyboard behavior without Tailwind Eleme
   await page.keyboard.press('Escape')
   await expect(navigationPanel).toBeHidden()
   await expect(navigationButton).toBeFocused()
+})
+
+test('browser telemetry starts only after analytics consent', async ({ page }) => {
+  const otlpRequests: string[] = []
+  const otlpBodies: Buffer[] = []
+  await page.route('https://otel.test/**', async route => {
+    otlpRequests.push(route.request().url())
+    const body = route.request().postDataBuffer()
+    if (body) otlpBodies.push(body)
+    await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })
+  })
+  await page.route('https://www.googletagmanager.com/**', route =>
+    route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }),
+  )
+
+  await page.goto('/articles/personal-infrastructure', { waitUntil: 'domcontentloaded' })
+  expect(otlpRequests).toEqual([])
+  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
+
+  await page.evaluate(() => {
+    const consentWindow = window as Window & { setAnalyticsConsent: (value: string) => void }
+    consentWindow.setAnalyticsConsent('accepted')
+  })
+
+  await expect.poll(() => otlpRequests.length).toBeGreaterThan(0)
+  await expect.poll(() =>
+    otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_opened'))),
+  ).toBe(true)
+
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await expect.poll(() =>
+    otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_completed'))),
+  ).toBe(true)
+  expect(otlpRequests.every(url => url === 'https://otel.test/v1/logs' || url === 'https://otel.test/v1/traces')).toBe(true)
+  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).not.toBeNull()
 })
 
 test('legacy company paths permanently redirect to Meier Made', async ({ request }) => {

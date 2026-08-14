@@ -71,6 +71,7 @@ module ArticlePage =
     let primary (metadata: ArticleMetadata) (content: HtmlElement list) =
         let page = div {
             _data ("article-page", "")
+            _data ("telemetry-content-id", metadata.permalink)
 
             div {
                 _class "bg-cover bg-no-repeat bg-center bg-blend-overlay bg-gray-800"

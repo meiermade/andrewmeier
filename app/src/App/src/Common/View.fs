@@ -310,8 +310,52 @@ module Page =
         div { _id "page"; _class "min-h-screen bg-gray-100 dark:bg-gray-900"; page }
 
 type Document =
-    static member primary (page:HtmlElement, googleAnalyticsMeasurementId:string, ?selectedNav:string) =
+    static member primary (page:HtmlElement, googleAnalyticsMeasurementId:string, otelEndpoint:string, ?selectedNav:string) =
         let selectedNav = defaultArg selectedNav ""
+        let analyticsTemplate =
+            """
+window.dataLayer=window.dataLayer||[];
+window.gtag=window.gtag||function(){dataLayer.push(arguments);};
+gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
+window.loadGoogleAnalytics=window.loadGoogleAnalytics||function(){
+  if(window.__gaLoaded)return;
+  window.__gaLoaded=true;
+  var s=document.createElement('script');
+  s.async=true;
+  s.src='https://www.googletagmanager.com/gtag/js?id=__GA_ID__';
+  document.head.appendChild(s);
+  gtag('js',new Date());
+  gtag('config','__GA_ID__');
+};
+window.applyAnalyticsConsent=window.applyAnalyticsConsent||function(value){
+  if(value==='accepted'){
+    gtag('consent','update',{analytics_storage:'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
+    window.loadGoogleAnalytics();
+    if(window.loadOpenTelemetry)window.loadOpenTelemetry();
+  }else{
+    gtag('consent','update',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
+    if(window.disableOpenTelemetry)window.disableOpenTelemetry();
+  }
+};
+window.setAnalyticsConsent=window.setAnalyticsConsent||function(value){
+  localStorage.setItem('analytics-consent',value);
+  window.applyAnalyticsConsent(value);
+  var banner=document.getElementById('cookie-consent-banner');
+  if(banner)banner.classList.add('hidden');
+};
+document.addEventListener('DOMContentLoaded',function(){
+  var saved=localStorage.getItem('analytics-consent');
+  var banner=document.getElementById('cookie-consent-banner');
+  if(saved==='accepted'||saved==='declined'){
+    window.applyAnalyticsConsent(saved);
+    if(banner)banner.classList.add('hidden');
+  }else if(banner){
+    banner.classList.remove('hidden');
+  }
+});
+"""
+        let analyticsScript = analyticsTemplate.Replace("__GA_ID__", googleAnalyticsMeasurementId)
+
         html {
             _lang "en"
             head {
@@ -319,8 +363,12 @@ type Document =
                 meta { _charset "UTF-8" }
                 meta { _name "viewport"; _content "width=device-width, initial-scale=1.0" }
                 script { js "let t=localStorage.getItem('theme');if(t==='dark'||(!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.classList.add('dark')}" }
+                script { js analyticsScript }
                 script {
-                    js $"window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){{dataLayer.push(arguments);}};gtag('consent','default',{{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'}});window.loadGoogleAnalytics=window.loadGoogleAnalytics||function(){{if(window.__gaLoaded)return;window.__gaLoaded=true;var s=document.createElement('script');s.async=true;s.src='https://www.googletagmanager.com/gtag/js?id={googleAnalyticsMeasurementId}';document.head.appendChild(s);gtag('js',new Date());gtag('config','{googleAnalyticsMeasurementId}');}};window.loadSnowplow=window.loadSnowplow||function(){{if(window.__spLoaded)return;window.__spLoaded=true;(function(p,l,o,w,i,n,g){{if(!p[i]){{p.GlobalSnowplowNamespace=p.GlobalSnowplowNamespace||[];p.GlobalSnowplowNamespace.push(i);p[i]=function(){{(p[i].q=p[i].q||[]).push(arguments)}};p[i].q=p[i].q||[];n=l.createElement(o);g=l.getElementsByTagName(o)[0];n.async=1;n.src=w;g.parentNode.insertBefore(n,g)}}}})(window,document,'script','https://cdn.jsdelivr.net/npm/@snowplow/javascript-tracker@4/dist/sp.min.js','snowplow');snowplow('newTracker','sp','https://c.andymeier.dev',{{appId:'andymeier-dev',eventMethod:'post',postPath:'/i/v1',cookieDomain:'andymeier.dev',cookieSameSite:'Lax',cookieSecure:true,contexts:{{webPage:true}}}});snowplow('trackPageView');}};window.trackSnowplowPageView=window.trackSnowplowPageView||function(){{if(localStorage.getItem('analytics-consent')==='accepted'&&window.snowplow)window.snowplow('trackPageView');}};window.applyAnalyticsConsent=window.applyAnalyticsConsent||function(v){{if(v==='accepted'){{gtag('consent','update',{{analytics_storage:'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'}});window.loadGoogleAnalytics();window.loadSnowplow();}}else{{gtag('consent','update',{{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'}});}}}};window.setAnalyticsConsent=window.setAnalyticsConsent||function(v){{localStorage.setItem('analytics-consent',v);window.applyAnalyticsConsent(v);var b=document.getElementById('cookie-consent-banner');if(b)b.classList.add('hidden');}};document.addEventListener('DOMContentLoaded',function(){{var saved=localStorage.getItem('analytics-consent');var banner=document.getElementById('cookie-consent-banner');if(saved==='accepted'||saved==='declined'){{window.applyAnalyticsConsent(saved);if(banner)banner.classList.add('hidden');}}else if(banner){{banner.classList.remove('hidden');}}}});"
+                    _id "browser-telemetry"
+                    _type "module"
+                    _src (Asset.fingerprinted "/scripts/telemetry.js")
+                    _data ("otel-endpoint", otelEndpoint)
                 }
                 link { _href (Asset.fingerprinted "/css/compiled.css"); _rel "stylesheet" }
                 link { _href (Asset.fingerprinted "/css/prism.css"); _rel "stylesheet" }
@@ -352,7 +400,7 @@ type Document =
                         p {
                             _id "analytics-consent-description"
                             _class "mt-2 text-sm/6 text-gray-600 dark:text-gray-300"
-                            "Google Analytics and Snowplow are loaded only if you accept. They help me understand site usage; declining does not affect the site."
+                            "Google Analytics and self-hosted OpenTelemetry are loaded only if you accept. They help me understand site usage; declining does not affect the site."
                         }
                         div {
                             _class "mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"

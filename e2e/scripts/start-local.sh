@@ -24,13 +24,13 @@ if [[ "${E2E_SKIP_DOTNET_BUILD:-0}" != "1" ]]; then
   dotnet build src/App/App.fsproj --nologo --verbosity minimal
 fi
 
+./fake.sh BuildBrowser
 ./fake.sh BuildCss
 
 ASPNETCORE_ENVIRONMENT=Development \
 GOOGLE_ANALYTICS_MEASUREMENT_ID=G-LOCAL \
-OTEL_RESOURCE_ATTRIBUTES="deployment.environment.name=e2e" \
-OTEL_SERVICE_NAME="andymeier-e2e" \
-SEQ_ENDPOINT="http://127.0.0.1:5341" \
+OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:4318" \
+PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT="https://otel.test" \
 SERVER_URL="http://127.0.0.1:${server_port}" \
   dotnet run --no-build --project src/App/App.fsproj > "$log_dir/app.log" 2>&1 &
 app_pid=$!

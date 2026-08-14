@@ -201,7 +201,7 @@ let tests =
 
         testList "Document" [
             test "includes consent banner and delayed analytics loading" {
-                let doc = Document.primary(div { "Hello" }, "G-TEST123", "nav-home")
+                let doc = Document.primary(div { "Hello" }, "G-TEST123", "https://otel.meiermade.com", "nav-home")
 
                 let html = Render.toHtmlDocString doc
 
@@ -214,13 +214,14 @@ let tests =
                 Expect.stringContains html "Decline" "Expected decline action"
                 Expect.stringContains html "Accept analytics" "Expected accept action"
                 Expect.stringContains html "gtag('consent','default',{analytics_storage:'denied'" "Expected denied-by-default consent mode"
-                Expect.stringContains html "localStorage.setItem('analytics-consent',v)" "Expected consent to be persisted"
+                Expect.stringContains html "localStorage.setItem('analytics-consent',value)" "Expected consent to be persisted"
                 Expect.stringContains html "https://www.googletagmanager.com/gtag/js?id=G-TEST123" "Expected deferred gtag script source"
                 Expect.stringContains html "gtag('config','G-TEST123');" "Expected GA config call after consent"
-                Expect.stringContains html "https://cdn.jsdelivr.net/npm/@snowplow/javascript-tracker@4/dist/sp.min.js" "Expected deferred Snowplow tracker source"
-                Expect.stringContains html "https://c.andymeier.dev" "Expected Snowplow collector endpoint"
-                Expect.stringContains html "postPath:'/i/v1'" "Expected custom Snowplow post path"
-                Expect.stringContains html "appId:'andymeier-dev'" "Expected Snowplow app id"
+                Expect.stringContains html "id=\"browser-telemetry\"" "Expected the locally bundled browser telemetry module"
+                Expect.stringContains html "src=\"/scripts/telemetry.js\"" "Expected the browser telemetry asset"
+                Expect.stringContains html "data-otel-endpoint=\"https://otel.meiermade.com\"" "Expected the public OTLP endpoint"
+                Expect.stringContains html "window.loadOpenTelemetry" "Expected consent to start OpenTelemetry"
+                Expect.isFalse (html.Contains "snowplow") "Expected Snowplow to be removed"
                 Expect.isFalse (html.Contains "tailwindplus-elements") "Expected no Tailwind Elements runtime"
                 Expect.isFalse (html.Contains "const itemsFor") "Expected no global interaction state machine"
                 Expect.isFalse (html.Contains "data-select-root") "Expected no custom select state machine"
