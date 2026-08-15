@@ -52,6 +52,8 @@ test('articles index renders and opens a source-controlled article', async ({ pa
   await expect(page.locator('article')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'F# Semantic Kernel', exact: true })).toBeVisible()
   await expect(page.getByText('Microsoft’s Semantic Kernel SDK', { exact: false }).first()).toBeVisible()
+  await expect(page.locator('code.language-fsharp .token.keyword').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Copy' }).first()).toBeVisible()
 })
 
 test('development environment article presents the current setup', async ({ page }) => {

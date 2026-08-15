@@ -1,11 +1,11 @@
 FROM --platform=$BUILDPLATFORM node:24.11.1-alpine AS browser-builder
 
-WORKDIR /app/browser
-COPY browser/package.json browser/package-lock.json ./
+WORKDIR /app/src/App
+COPY src/App/package.json src/App/package-lock.json ./
 RUN npm ci --ignore-scripts
-COPY browser/src src
-COPY browser/tsconfig.json ./
-RUN mkdir -p /app/src/App/wwwroot/scripts \
+COPY src/App/Client Client
+COPY src/App/tsconfig.json ./
+RUN mkdir -p wwwroot/scripts \
     && npm run check \
     && npm test \
     && npm run build
@@ -35,7 +35,7 @@ RUN dotnet paket install && dotnet paket restore
 
 # copy projects and build script
 COPY src src
-COPY --from=browser-builder /app/src/App/wwwroot/scripts/telemetry.js src/App/wwwroot/scripts/telemetry.js
+COPY --from=browser-builder /app/src/App/wwwroot/scripts/ src/App/wwwroot/scripts/
 COPY fake.sh .
 RUN chmod +x ./fake.sh
 

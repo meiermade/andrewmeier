@@ -20,7 +20,6 @@ Environment.GetCommandLineArgs()
 let srcDir = Path.getDirectory __SOURCE_DIRECTORY__
 let rootDir = Path.getDirectory srcDir
 let appDir = srcDir </> "App"
-let browserDir = rootDir </> "browser"
 let outDir = appDir </> "out"
 let wwwrootDir = outDir </> "wwwroot"
 let hashedAssetExtensions =
@@ -103,11 +102,12 @@ Target.create "Watch" <| fun _ ->
         ]
         |> EnvMap.ofMap
 
-    exec "npm" browserDir ["ci"; "--ignore-scripts"] |> _.Wait()
-    let watchBrowser = exec "npm" browserDir ["run"; "build"; "--"; "--watch"]
+    exec "npm" appDir ["ci"; "--ignore-scripts"] |> _.Wait()
+    let watchPrism = exec "npm" appDir ["run"; "build:prism"; "--"; "--watch"]
+    let watchTelemetry = exec "npm" appDir ["run"; "build:telemetry"; "--"; "--watch"]
     let watchCss = exec "tailwindcss" appDir ["--input"; "./input.css"; "--output"; "./wwwroot/css/compiled.css"; "--watch"]
     let watchServer = execEnv "dotnet" appDir env ["watch"; "run"; "--no-restore"]
-    Task.WaitAny(watchBrowser, watchCss, watchServer) |> ignore
+    Task.WaitAny(watchPrism, watchTelemetry, watchCss, watchServer) |> ignore
 
 Target.create "BuildCss" <| fun _ ->
     let buildCss = exec "tailwindcss" appDir ["--input"; "./input.css"; "--output"; "./wwwroot/css/compiled.css"; "--minify"]
@@ -115,14 +115,14 @@ Target.create "BuildCss" <| fun _ ->
 
 Target.create "BuildBrowser" <| fun _ ->
     if not (Environment.GetEnvironmentVariable("SKIP_BROWSER_BUILD") = "true") then
-        exec "npm" browserDir ["ci"; "--ignore-scripts"] |> _.Wait()
-        exec "npm" browserDir ["run"; "check"] |> _.Wait()
-        exec "npm" browserDir ["run"; "build"] |> _.Wait()
+        exec "npm" appDir ["ci"; "--ignore-scripts"] |> _.Wait()
+        exec "npm" appDir ["run"; "check"] |> _.Wait()
+        exec "npm" appDir ["run"; "build"] |> _.Wait()
 
 Target.create "Test" <| fun _ ->
-    exec "npm" browserDir ["ci"; "--ignore-scripts"] |> _.Wait()
-    exec "npm" browserDir ["run"; "check"] |> _.Wait()
-    exec "npm" browserDir ["test"] |> _.Wait()
+    exec "npm" appDir ["ci"; "--ignore-scripts"] |> _.Wait()
+    exec "npm" appDir ["run"; "check"] |> _.Wait()
+    exec "npm" appDir ["test"] |> _.Wait()
     let tests = exec "dotnet" rootDir ["run"; "--project"; "src/Tests/Tests.fsproj"]
     tests.Wait()
 

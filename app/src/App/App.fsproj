@@ -8,6 +8,8 @@
   <ItemGroup>
     <Content Include="input.css" />
     <Content Include="paket.references" />
+    <Content Update="package.json" CopyToPublishDirectory="Never" />
+    <Content Update="package-lock.json" CopyToPublishDirectory="Never" />
     <Compile Include="src/Infrastructure.fs" />
     <Compile Include="src/Config.fs" />
     <Compile Include="src/Telemetry.fs" />

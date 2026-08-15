@@ -115,7 +115,7 @@ module ArticlePage =
                 }
             }
 
-            script { _src (Asset.fingerprinted "/scripts/prism.1.29.0.js") }
+            script { _src (Asset.fingerprinted "/scripts/prism.js") }
             script { js "function highlightCode(el){if(el?.querySelectorAll)Prism.highlightAllUnder(el)}" }
 
             script {
