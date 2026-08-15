@@ -97,7 +97,6 @@ Target.create "Watch" <| fun _ ->
     let env =
         Map.ofList [
             "ASPNETCORE_ENVIRONMENT", "Development"
-            "GOOGLE_ANALYTICS_MEASUREMENT_ID", "G-LOCAL"
             "SERVER_URL", serverUrl
         ]
         |> EnvMap.ofMap

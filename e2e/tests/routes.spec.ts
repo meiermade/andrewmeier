@@ -244,18 +244,21 @@ test('navigation disclosures use native keyboard behavior without Tailwind Eleme
 })
 
 test('browser telemetry starts only after analytics consent', async ({ page }) => {
+  const googleAnalyticsRequests: string[] = []
   const otlpRequests: string[] = []
   const otlpBodies: Buffer[] = []
+  page.on('request', request => {
+    const hostname = new URL(request.url()).hostname
+    if (hostname === 'www.googletagmanager.com' || hostname === 'google-analytics.com' || hostname.endsWith('.google-analytics.com')) {
+      googleAnalyticsRequests.push(request.url())
+    }
+  })
   await page.route('https://otel.test/**', async route => {
     otlpRequests.push(route.request().url())
     const body = route.request().postDataBuffer()
     if (body) otlpBodies.push(body)
     await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })
   })
-  await page.route('https://www.googletagmanager.com/**', route =>
-    route.fulfill({ status: 200, contentType: 'application/javascript', body: '' }),
-  )
-
   await page.goto('/articles/personal-infrastructure', { waitUntil: 'domcontentloaded' })
   expect(otlpRequests).toEqual([])
   expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
@@ -275,6 +278,7 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
     otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_completed'))),
   ).toBe(true)
   expect(otlpRequests.every(url => url === 'https://otel.test/v1/logs' || url === 'https://otel.test/v1/traces')).toBe(true)
+  expect(googleAnalyticsRequests).toEqual([])
   expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).not.toBeNull()
 })
 

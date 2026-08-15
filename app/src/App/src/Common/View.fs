@@ -310,31 +310,15 @@ module Page =
         div { _id "page"; _class "min-h-screen bg-gray-100 dark:bg-gray-900"; page }
 
 type Document =
-    static member primary (page:HtmlElement, googleAnalyticsMeasurementId:string, otelEndpoint:string, ?selectedNav:string) =
+    static member primary (page:HtmlElement, otelEndpoint:string, ?selectedNav:string) =
         let selectedNav = defaultArg selectedNav ""
-        let analyticsTemplate =
+        let analyticsScript =
             """
-window.dataLayer=window.dataLayer||[];
-window.gtag=window.gtag||function(){dataLayer.push(arguments);};
-gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
-window.loadGoogleAnalytics=window.loadGoogleAnalytics||function(){
-  if(window.__gaLoaded)return;
-  window.__gaLoaded=true;
-  var s=document.createElement('script');
-  s.async=true;
-  s.src='https://www.googletagmanager.com/gtag/js?id=__GA_ID__';
-  document.head.appendChild(s);
-  gtag('js',new Date());
-  gtag('config','__GA_ID__');
-};
 window.applyAnalyticsConsent=window.applyAnalyticsConsent||function(value){
   if(value==='accepted'){
-    gtag('consent','update',{analytics_storage:'granted',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
-    window.loadGoogleAnalytics();
     if(window.loadOpenTelemetry)window.loadOpenTelemetry();
-  }else{
-    gtag('consent','update',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
-    if(window.disableOpenTelemetry)window.disableOpenTelemetry();
+  }else if(window.disableOpenTelemetry){
+    window.disableOpenTelemetry();
   }
 };
 window.setAnalyticsConsent=window.setAnalyticsConsent||function(value){
@@ -354,7 +338,6 @@ document.addEventListener('DOMContentLoaded',function(){
   }
 });
 """
-        let analyticsScript = analyticsTemplate.Replace("__GA_ID__", googleAnalyticsMeasurementId)
 
         html {
             _lang "en"
@@ -400,7 +383,7 @@ document.addEventListener('DOMContentLoaded',function(){
                         p {
                             _id "analytics-consent-description"
                             _class "mt-2 text-sm/6 text-gray-600 dark:text-gray-300"
-                            "Google Analytics and self-hosted OpenTelemetry are loaded only if you accept. They help me understand site usage; declining does not affect the site."
+                            "Self-hosted OpenTelemetry is loaded only if you accept. It helps me understand site usage, performance, and errors; declining does not affect the site."
                         }
                         div {
                             _class "mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"

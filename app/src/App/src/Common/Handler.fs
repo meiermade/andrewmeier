@@ -27,7 +27,7 @@ let pushUrl (ds:IDatastarService) (url:string) = task {
 
 let renderPage (services:Services) (page:HtmlElement) (selectedNav:string) : HttpHandler =
     fun next ctx -> task {
-        let doc = Document.primary(page, services.config.googleAnalytics.measurementId, services.config.openTelemetry.publicEndpoint, selectedNav)
+        let doc = Document.primary(page, services.config.openTelemetry.publicEndpoint, selectedNav)
         let html = Render.toHtmlDocString doc
         return! htmlString html next ctx
     }

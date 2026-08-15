@@ -54,7 +54,6 @@ const deployment = new k8s.apps.v1.Deployment('app', {
                             { name: 'SERVER_URL', value: 'http://0.0.0.0:5000' },
                             { name: 'OTEL_EXPORTER_OTLP_ENDPOINT', value: config.openTelemetryConfig.endpoint },
                             { name: 'PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT', value: config.openTelemetryConfig.publicEndpoint },
-                            { name: 'GOOGLE_ANALYTICS_MEASUREMENT_ID', value: config.googleAnalyticsConfig.measurementId },
                         ],
                         resources: {
                             requests: { cpu: '25m', memory: '64Mi' },

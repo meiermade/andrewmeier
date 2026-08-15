@@ -201,7 +201,7 @@ let tests =
 
         testList "Document" [
             test "includes consent banner and delayed analytics loading" {
-                let doc = Document.primary(div { "Hello" }, "G-TEST123", "https://otel.meiermade.com", "nav-home")
+                let doc = Document.primary(div { "Hello" }, "https://otel.meiermade.com", "nav-home")
 
                 let html = Render.toHtmlDocString doc
 
@@ -213,10 +213,10 @@ let tests =
                 Expect.stringContains html "rounded-2xl" "Expected compact consent card"
                 Expect.stringContains html "Decline" "Expected decline action"
                 Expect.stringContains html "Accept analytics" "Expected accept action"
-                Expect.stringContains html "gtag('consent','default',{analytics_storage:'denied'" "Expected denied-by-default consent mode"
+                Expect.stringContains html "Self-hosted OpenTelemetry is loaded only if you accept." "Expected first-party analytics disclosure"
                 Expect.stringContains html "localStorage.setItem('analytics-consent',value)" "Expected consent to be persisted"
-                Expect.stringContains html "https://www.googletagmanager.com/gtag/js?id=G-TEST123" "Expected deferred gtag script source"
-                Expect.stringContains html "gtag('config','G-TEST123');" "Expected GA config call after consent"
+                Expect.isFalse (html.Contains "googletagmanager.com") "Expected no Google tag loader"
+                Expect.isFalse (html.Contains "gtag(") "Expected no Google Analytics calls"
                 Expect.stringContains html "id=\"browser-telemetry\"" "Expected the locally bundled browser telemetry module"
                 Expect.stringContains html "src=\"/scripts/telemetry.js\"" "Expected the browser telemetry asset"
                 Expect.stringContains html "data-otel-endpoint=\"https://otel.meiermade.com\"" "Expected the public OTLP endpoint"

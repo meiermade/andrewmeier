@@ -32,9 +32,3 @@ export const openTelemetryConfig = {
     endpoint: rawOpenTelemetryConfig.require('endpoint'),
     publicEndpoint: rawOpenTelemetryConfig.require('publicEndpoint'),
 }
-
-const rawGoogleAnalyticsConfig = new pulumi.Config('googleAnalytics')
-
-export const googleAnalyticsConfig = {
-    measurementId: rawGoogleAnalyticsConfig.require('measurementId')
-}

@@ -29,24 +29,15 @@ module ServerConfig =
     let load () =
         { url = Env.variableOrDefault "SERVER_URL" "https://localhost:5000" }
 
-type GoogleAnalyticsConfig =
-    { measurementId:string }
-
-module GoogleAnalyticsConfig =
-    let load () =
-        { measurementId = Env.variable "GOOGLE_ANALYTICS_MEASUREMENT_ID" }
-
 type Config =
     { debug:bool
       appName:string
       server:ServerConfig
-      openTelemetry:OpenTelemetryConfig
-      googleAnalytics:GoogleAnalyticsConfig }
+      openTelemetry:OpenTelemetryConfig }
 
 module Config =
     let load () =
         { debug = Env.variableOrDefault "DEBUG" "false" |> Boolean.Parse
           appName = "andymeier"
           server = ServerConfig.load ()
-          openTelemetry = OpenTelemetryConfig.load ()
-          googleAnalytics = GoogleAnalyticsConfig.load () }
+          openTelemetry = OpenTelemetryConfig.load () }
