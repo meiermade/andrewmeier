@@ -10,7 +10,11 @@ test.beforeEach(async ({ page }) => {
     )
   }
 
-  await page.addInitScript(() => localStorage.setItem('analytics-consent', 'declined'))
+  await page.addInitScript(() => {
+    if (localStorage.getItem('analytics-consent') === null) {
+      localStorage.setItem('analytics-consent', 'declined')
+    }
+  })
 })
 
 test('homepage renders recent articles', async ({ page }) => {
@@ -272,6 +276,8 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
   await expect.poll(() =>
     otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_opened'))),
   ).toBe(true)
+  await page.waitForTimeout(1500)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('browser.web_vital')))).toBe(false)
 
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
   await expect.poll(() =>
@@ -280,6 +286,12 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
   expect(otlpRequests.every(url => url === 'https://otel.test/v1/logs' || url === 'https://otel.test/v1/traces')).toBe(true)
   expect(googleAnalyticsRequests).toEqual([])
   expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).not.toBeNull()
+
+  otlpBodies.length = 0
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await expect.poll(() =>
+    otlpBodies.some(body => body.includes(Buffer.from('browser.web_vital'))),
+  ).toBe(true)
 })
 
 test('legacy company paths permanently redirect to Meier Made', async ({ request }) => {

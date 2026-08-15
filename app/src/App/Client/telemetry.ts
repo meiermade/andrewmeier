@@ -14,6 +14,7 @@ import { pathAttributes, sanitizedUrl } from './event-contract';
 
 const consentKey = 'analytics-consent';
 const sessionKey = 'opentelemetry-session-id';
+const analyticsConsentWasPreviouslyGranted = localStorage.getItem(consentKey) === 'accepted';
 const script = document.getElementById('browser-telemetry') as HTMLScriptElement | null;
 const endpoint = script?.dataset.otelEndpoint?.replace(/\/$/, '');
 const completedArticles = new Set<string>();
@@ -174,10 +175,12 @@ async function initialize(): Promise<void> {
           sanitizeUrl: sanitizedUrl,
           applyCustomLogRecordData: addCommonEventData,
         }),
-        new WebVitalsInstrumentation({
-          includeRawAttribution: false,
-          applyCustomLogRecordData: addCommonEventData,
-        }),
+        ...(analyticsConsentWasPreviouslyGranted
+          ? [new WebVitalsInstrumentation({
+              includeRawAttribution: false,
+              applyCustomLogRecordData: addCommonEventData,
+            })]
+          : []),
         new ErrorsInstrumentation({
           applyCustomAttributes: () => commonAttributes(),
         }),
