@@ -26,14 +26,9 @@ export const k8sConfig = {
     namespace: rawK8sConfig.require('namespace')
 }
 
-const rawSeqConfig = new pulumi.Config('seq')
+const rawOpenTelemetryConfig = new pulumi.Config('openTelemetry')
 
-export const seqConfig = {
-    endpoint: rawSeqConfig.require('endpoint')
-}
-
-const rawGoogleAnalyticsConfig = new pulumi.Config('googleAnalytics')
-
-export const googleAnalyticsConfig = {
-    measurementId: rawGoogleAnalyticsConfig.require('measurementId')
+export const openTelemetryConfig = {
+    endpoint: rawOpenTelemetryConfig.require('endpoint'),
+    publicEndpoint: rawOpenTelemetryConfig.require('publicEndpoint'),
 }

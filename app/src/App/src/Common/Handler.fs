@@ -19,7 +19,7 @@ let inline patchSignals (ds:IDatastarService) (signals:'T) = task {
 
 let historyScript (url:string) =
     let serializedUrl = JsonSerializer.Serialize url
-    $"""window.history.pushState(null, '', {serializedUrl});window.trackSnowplowPageView&&window.trackSnowplowPageView();"""
+    $"""window.history.pushState(null, '', {serializedUrl});window.meiermadeTelemetry&&window.meiermadeTelemetry.trackPage();"""
 
 let pushUrl (ds:IDatastarService) (url:string) = task {
     do! ds.ExecuteScriptAsync(historyScript url)
@@ -27,7 +27,7 @@ let pushUrl (ds:IDatastarService) (url:string) = task {
 
 let renderPage (services:Services) (page:HtmlElement) (selectedNav:string) : HttpHandler =
     fun next ctx -> task {
-        let doc = Document.primary(page, services.config.googleAnalytics.measurementId, selectedNav)
+        let doc = Document.primary(page, services.config.openTelemetry.publicEndpoint, selectedNav)
         let html = Render.toHtmlDocString doc
         return! htmlString html next ctx
     }

@@ -13,12 +13,14 @@ module Env =
         | value when String.IsNullOrEmpty value -> defaultValue
         | value -> value
 
-type SeqConfig =
-    { endpoint:string }
+type OpenTelemetryConfig =
+    { endpoint:string
+      publicEndpoint:string }
 
-module SeqConfig =
+module OpenTelemetryConfig =
     let load () =
-        { endpoint = Env.variableOrDefault "SEQ_ENDPOINT" "http://localhost:5341" }
+        { endpoint = Env.variableOrDefault "OTEL_EXPORTER_OTLP_ENDPOINT" "http://localhost:4318"
+          publicEndpoint = Env.variableOrDefault "PUBLIC_OTEL_EXPORTER_OTLP_ENDPOINT" "http://localhost:4318" }
 
 type ServerConfig =
     { url:string }
@@ -27,24 +29,15 @@ module ServerConfig =
     let load () =
         { url = Env.variableOrDefault "SERVER_URL" "https://localhost:5000" }
 
-type GoogleAnalyticsConfig =
-    { measurementId:string }
-
-module GoogleAnalyticsConfig =
-    let load () =
-        { measurementId = Env.variable "GOOGLE_ANALYTICS_MEASUREMENT_ID" }
-
 type Config =
     { debug:bool
       appName:string
       server:ServerConfig
-      seq:SeqConfig
-      googleAnalytics:GoogleAnalyticsConfig }
+      openTelemetry:OpenTelemetryConfig }
 
 module Config =
     let load () =
         { debug = Env.variableOrDefault "DEBUG" "false" |> Boolean.Parse
           appName = "andymeier"
           server = ServerConfig.load ()
-          seq = SeqConfig.load ()
-          googleAnalytics = GoogleAnalyticsConfig.load () }
+          openTelemetry = OpenTelemetryConfig.load () }

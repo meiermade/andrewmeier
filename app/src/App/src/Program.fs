@@ -6,6 +6,7 @@ open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open OpenTelemetry
 open OpenTelemetry.Exporter
+open OpenTelemetry.Metrics
 open OpenTelemetry.Resources
 open OpenTelemetry.Trace
 open Serilog
@@ -24,7 +25,20 @@ let configureTracerProvider (config: Config) =
             opts.Filter <- fun ctx -> ctx.Request.Path.Value <> "/health")
         .AddHttpClientInstrumentation()
         .AddOtlpExporter(fun opts ->
-            opts.Endpoint <- Uri(config.seq.endpoint + "/ingest/otlp/v1/traces")
+            opts.Endpoint <- Uri(config.openTelemetry.endpoint + "/v1/traces")
+            opts.Protocol <- OtlpExportProtocol.HttpProtobuf)
+        .Build()
+
+let configureMeterProvider (config:Config) =
+    Sdk
+        .CreateMeterProviderBuilder()
+        .ConfigureResource(fun resourceBuilder ->
+            resourceBuilder.AddService(serviceName = config.appName) |> ignore)
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddRuntimeInstrumentation()
+        .AddOtlpExporter(fun opts ->
+            opts.Endpoint <- Uri(config.openTelemetry.endpoint + "/v1/metrics")
             opts.Protocol <- OtlpExportProtocol.HttpProtobuf)
         .Build()
 
@@ -39,7 +53,7 @@ let configureLogger (config: Config) =
             .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
             .WriteTo.Console()
             .WriteTo.OpenTelemetry(fun opts ->
-                opts.Endpoint <- config.seq.endpoint + "/ingest/otlp/v1/logs"
+                opts.Endpoint <- config.openTelemetry.endpoint + "/v1/logs"
                 opts.Protocol <- OtlpProtocol.HttpProtobuf
                 opts.ResourceAttributes.Add("service.name", box config.appName))
             .CreateLogger()
@@ -82,11 +96,13 @@ let main _args =
     try
         try
             let tracerProvider = configureTracerProvider config
+            let meterProvider = configureMeterProvider config
             let tracer = tracerProvider.GetTracer(config.appName)
             let services = Services.create config tracer
 
             let builder = WebApplication.CreateBuilder()
             configureServices builder.Services tracerProvider services
+            builder.Services.AddSingleton(meterProvider) |> ignore
             let app = builder.Build()
 
             configureApp services app

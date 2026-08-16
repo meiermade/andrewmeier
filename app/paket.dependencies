@@ -5,9 +5,9 @@ nuget FSharp.ViewEngine
 nuget FsToolkit.ErrorHandling
 nuget FsToolkit.ErrorHandling.TaskResult
 nuget Giraffe
+nuget OpenTelemetry.Instrumentation.Runtime
 nuget Serilog
 nuget Serilog.AspNetCore
-nuget Serilog.Sinks.Seq
 nuget Serilog.Sinks.Console
 nuget Serilog.Sinks.OpenTelemetry
 nuget Starfederation.Datastar

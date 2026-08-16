@@ -1,0 +1,32 @@
+{
+  "name": "andymeier-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:prism && npm run build:telemetry",
+    "build:prism": "esbuild Client/prism.ts --bundle --format=iife --minify --outfile=wwwroot/scripts/prism.js",
+    "build:telemetry": "esbuild Client/telemetry.ts --bundle --format=esm --minify --outfile=wwwroot/scripts/telemetry.js",
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "1.9.1",
+    "@opentelemetry/api-logs": "0.221.0",
+    "@opentelemetry/browser-instrumentation": "0.7.0",
+    "@opentelemetry/exporter-logs-otlp-http": "0.221.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.221.0",
+    "@opentelemetry/instrumentation": "0.221.0",
+    "@opentelemetry/instrumentation-fetch": "0.221.0",
+    "@opentelemetry/resources": "2.10.0",
+    "@opentelemetry/sdk-logs": "0.221.0",
+    "@opentelemetry/sdk-trace-web": "2.10.0",
+    "prismjs": "1.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/prismjs": "1.26.6",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "4.1.10"
+  }
+}

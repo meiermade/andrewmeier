@@ -71,6 +71,7 @@ module ArticlePage =
     let primary (metadata: ArticleMetadata) (content: HtmlElement list) =
         let page = div {
             _data ("article-page", "")
+            _data ("telemetry-content-id", metadata.permalink)
 
             div {
                 _class "bg-cover bg-no-repeat bg-center bg-blend-overlay bg-gray-800"
@@ -114,7 +115,7 @@ module ArticlePage =
                 }
             }
 
-            script { _src (Asset.fingerprinted "/scripts/prism.1.29.0.js") }
+            script { _src (Asset.fingerprinted "/scripts/prism.js") }
             script { js "function highlightCode(el){if(el?.querySelectorAll)Prism.highlightAllUnder(el)}" }
 
             script {

@@ -1,3 +1,15 @@
+FROM --platform=$BUILDPLATFORM node:24.11.1-alpine AS browser-builder
+
+WORKDIR /app/src/App
+COPY src/App/package.json src/App/package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY src/App/Client Client
+COPY src/App/tsconfig.json ./
+RUN mkdir -p wwwroot/scripts \
+    && npm run check \
+    && npm test \
+    && npm run build
+
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble AS builder
 
 WORKDIR /app
@@ -23,11 +35,12 @@ RUN dotnet paket install && dotnet paket restore
 
 # copy projects and build script
 COPY src src
+COPY --from=browser-builder /app/src/App/wwwroot/scripts/ src/App/wwwroot/scripts/
 COPY fake.sh .
 RUN chmod +x ./fake.sh
 
 # publish the server 
-RUN ./fake.sh Publish
+RUN SKIP_BROWSER_BUILD=true ./fake.sh Publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS runner
 

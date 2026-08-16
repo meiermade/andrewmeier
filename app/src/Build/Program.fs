@@ -97,20 +97,31 @@ Target.create "Watch" <| fun _ ->
     let env =
         Map.ofList [
             "ASPNETCORE_ENVIRONMENT", "Development"
-            "GOOGLE_ANALYTICS_MEASUREMENT_ID", "G-LOCAL"
             "SERVER_URL", serverUrl
         ]
         |> EnvMap.ofMap
 
+    exec "npm" appDir ["ci"; "--ignore-scripts"] |> _.Wait()
+    let watchPrism = exec "npm" appDir ["run"; "build:prism"; "--"; "--watch"]
+    let watchTelemetry = exec "npm" appDir ["run"; "build:telemetry"; "--"; "--watch"]
     let watchCss = exec "tailwindcss" appDir ["--input"; "./input.css"; "--output"; "./wwwroot/css/compiled.css"; "--watch"]
     let watchServer = execEnv "dotnet" appDir env ["watch"; "run"; "--no-restore"]
-    Task.WaitAny(watchCss, watchServer) |> ignore
+    Task.WaitAny(watchPrism, watchTelemetry, watchCss, watchServer) |> ignore
 
 Target.create "BuildCss" <| fun _ ->
     let buildCss = exec "tailwindcss" appDir ["--input"; "./input.css"; "--output"; "./wwwroot/css/compiled.css"; "--minify"]
     buildCss.Wait()
 
+Target.create "BuildBrowser" <| fun _ ->
+    if not (Environment.GetEnvironmentVariable("SKIP_BROWSER_BUILD") = "true") then
+        exec "npm" appDir ["ci"; "--ignore-scripts"] |> _.Wait()
+        exec "npm" appDir ["run"; "check"] |> _.Wait()
+        exec "npm" appDir ["run"; "build"] |> _.Wait()
+
 Target.create "Test" <| fun _ ->
+    exec "npm" appDir ["ci"; "--ignore-scripts"] |> _.Wait()
+    exec "npm" appDir ["run"; "check"] |> _.Wait()
+    exec "npm" appDir ["test"] |> _.Wait()
     let tests = exec "dotnet" rootDir ["run"; "--project"; "src/Tests/Tests.fsproj"]
     tests.Wait()
 
@@ -129,6 +140,7 @@ Target.create "Default" (fun _ -> Target.listAvailable())
 "StartDeps" ==>! "EnsureDevCert"
 "EnsureDevCert" ==>! "Watch"
 
+"BuildBrowser" ==>! "Publish"
 "BuildCss" ==>! "Publish"
 
 Target.runOrDefaultWithArguments "Default"
