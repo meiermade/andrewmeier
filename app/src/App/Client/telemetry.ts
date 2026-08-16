@@ -10,11 +10,11 @@ import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs';
 import { BatchSpanProcessor, WebTracerProvider } from '@opentelemetry/sdk-trace-web';
-import { pathAttributes, sanitizedUrl } from './event-contract';
+import { consentChoice, pathAttributes, sanitizedUrl, trafficAttributes } from './event-contract';
 
-const consentKey = 'analytics-consent';
 const sessionKey = 'opentelemetry-session-id';
-const analyticsConsentWasPreviouslyGranted = localStorage.getItem(consentKey) === 'accepted';
+const attributionKey = 'opentelemetry-traffic-attribution';
+const analyticsConsentWasPreviouslyGranted = consentChoice(document.cookie) === 'accepted';
 const script = document.getElementById('browser-telemetry') as HTMLScriptElement | null;
 const endpoint = script?.dataset.otelEndpoint?.replace(/\/$/, '');
 const completedArticles = new Set<string>();
@@ -26,6 +26,7 @@ let logger: ReturnType<typeof logs.getLogger> | undefined;
 let initialization: Promise<void> | undefined;
 let clickHandler: ((event: MouseEvent) => void) | undefined;
 let lastTrackedPath: string | undefined;
+let sessionAttribution: Attributes | undefined;
 
 function sessionId(): string {
   const existing = sessionStorage.getItem(sessionKey);
@@ -36,8 +37,27 @@ function sessionId(): string {
   return created;
 }
 
+function attributionAttributes(): Attributes {
+  if (sessionAttribution) return sessionAttribution;
+
+  const stored = sessionStorage.getItem(attributionKey);
+  if (stored) {
+    try {
+      sessionAttribution = JSON.parse(stored) as Attributes;
+      return sessionAttribution;
+    } catch {
+      sessionStorage.removeItem(attributionKey);
+    }
+  }
+
+  sessionAttribution = trafficAttributes(window.location.href, document.referrer);
+  sessionStorage.setItem(attributionKey, JSON.stringify(sessionAttribution));
+  return sessionAttribution;
+}
+
 function commonAttributes(): Attributes {
   return {
+    ...attributionAttributes(),
     'session.id': sessionId(),
     'url.path': window.location.pathname,
   };
@@ -130,7 +150,7 @@ function flushWhenHidden(): void {
 }
 
 async function initialize(): Promise<void> {
-  if (!endpoint || loggerProvider || localStorage.getItem(consentKey) !== 'accepted') return;
+  if (!endpoint || loggerProvider || consentChoice(document.cookie) !== 'accepted') return;
   if (initialization) return initialization;
 
   initialization = (async () => {
@@ -231,10 +251,12 @@ async function disable(): Promise<void> {
   loggerProvider = undefined;
   tracerProvider = undefined;
   lastTrackedPath = undefined;
+  sessionAttribution = undefined;
   logs.disable();
   trace.disable();
   context.disable();
   sessionStorage.removeItem(sessionKey);
+  sessionStorage.removeItem(attributionKey);
 }
 
 declare global {
@@ -252,7 +274,7 @@ window.loadOpenTelemetry = initialize;
 window.disableOpenTelemetry = disable;
 window.meiermadeTelemetry = { emit, trackPage };
 
-if (localStorage.getItem(consentKey) === 'accepted') void initialize();
+if (consentChoice(document.cookie) === 'accepted') void initialize();
 window.addEventListener('pagehide', (event) => {
   if (!event.persisted) void disable();
 });

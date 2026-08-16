@@ -181,6 +181,12 @@ module Footer =
                 _class "text-sm flex flex-col space-y-1"
                 a { _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", "@get('/articles')"); "Articles" }
                 a { _href "https://meiermade.com"; _class "whitespace-nowrap underline hover:text-emerald-600 dark:hover:text-emerald-400"; "Meier Made" }
+                button {
+                    _id "analytics-settings"
+                    _type "button"
+                    _class "text-left underline hover:text-emerald-600 dark:hover:text-emerald-400"
+                    "Analytics settings"
+                }
             }
         }
 
@@ -312,32 +318,7 @@ module Page =
 type Document =
     static member primary (page:HtmlElement, otelEndpoint:string, ?selectedNav:string) =
         let selectedNav = defaultArg selectedNav ""
-        let analyticsScript =
-            """
-window.applyAnalyticsConsent=window.applyAnalyticsConsent||function(value){
-  if(value==='accepted'){
-    if(window.loadOpenTelemetry)window.loadOpenTelemetry();
-  }else if(window.disableOpenTelemetry){
-    window.disableOpenTelemetry();
-  }
-};
-window.setAnalyticsConsent=window.setAnalyticsConsent||function(value){
-  localStorage.setItem('analytics-consent',value);
-  window.applyAnalyticsConsent(value);
-  var banner=document.getElementById('cookie-consent-banner');
-  if(banner)banner.classList.add('hidden');
-};
-document.addEventListener('DOMContentLoaded',function(){
-  var saved=localStorage.getItem('analytics-consent');
-  var banner=document.getElementById('cookie-consent-banner');
-  if(saved==='accepted'||saved==='declined'){
-    window.applyAnalyticsConsent(saved);
-    if(banner)banner.classList.add('hidden');
-  }else if(banner){
-    banner.classList.remove('hidden');
-  }
-});
-"""
+        let analyticsScript = App.Consent.clientScript
 
         html {
             _lang "en"
@@ -383,20 +364,25 @@ document.addEventListener('DOMContentLoaded',function(){
                         p {
                             _id "analytics-consent-description"
                             _class "mt-2 text-sm/6 text-gray-600 dark:text-gray-300"
-                            "Self-hosted OpenTelemetry is loaded only if you accept. It helps me understand site usage, performance, and errors; declining does not affect the site."
+                            "Optional browser analytics starts only if you accept. It helps me understand traffic sources, site usage, performance, and errors; declining does not affect the site. A first-party cookie remembers your choice for six months."
+                        }
+                        p {
+                            _id "analytics-consent-error"
+                            _ariaLive "polite"
+                            _class "mt-3 hidden text-sm/6 font-medium text-red-700 dark:text-red-300"
                         }
                         div {
                             _class "mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
                             button {
+                                _id "analytics-reject"
                                 _type "button"
-                                _class "rounded-full border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800"
-                                _onclick "setAnalyticsConsent('declined')"
+                                _class "rounded-full border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800"
                                 "Decline"
                             }
                             button {
+                                _id "analytics-accept"
                                 _type "button"
-                                _class "rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:hover:bg-emerald-400"
-                                _onclick "setAnalyticsConsent('accepted')"
+                                _class "rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:hover:bg-emerald-400"
                                 "Accept analytics"
                             }
                         }

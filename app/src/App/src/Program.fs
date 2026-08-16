@@ -22,7 +22,8 @@ let configureTracerProvider (config: Config) =
         .ConfigureResource(fun resourceBuilder ->
             resourceBuilder.AddService(serviceName = config.appName) |> ignore)
         .AddAspNetCoreInstrumentation(fun opts ->
-            opts.Filter <- fun ctx -> ctx.Request.Path.Value <> "/health")
+            opts.Filter <- fun ctx -> ctx.Request.Path.Value <> "/health"
+            opts.EnrichWithHttpRequest <- fun activity _ -> Telemetry.removeUrlQuery activity)
         .AddHttpClientInstrumentation()
         .AddOtlpExporter(fun opts ->
             opts.Endpoint <- Uri(config.openTelemetry.endpoint + "/v1/traces")

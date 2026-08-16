@@ -27,6 +27,7 @@ let private getHomePage (services:Services) : HttpHandler =
 let handler (services:Services) : HttpHandler =
     choose [
         route "/health" >=> GET >=> text "Healthy"
+        route "/privacy/consent" >=> POST >=> App.Consent.persist
         routex "(/?)" >=> GET >=> getHomePage services
         route "/services" >=> GET >=> redirectTo true "https://meiermade.com/services"
         route "/projects" >=> GET >=> redirectTo true "https://meiermade.com/projects"

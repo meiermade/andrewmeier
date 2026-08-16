@@ -12,6 +12,7 @@
     <Content Update="package-lock.json" CopyToPublishDirectory="Never" />
     <Compile Include="src/Infrastructure.fs" />
     <Compile Include="src/Config.fs" />
+    <Compile Include="src/Consent.fs" />
     <Compile Include="src/Telemetry.fs" />
     <Compile Include="src/Services.fs" />
     <Compile Include="src/Articles/Article.fs" />
