@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const isRemote = process.env.E2E_START_LOCAL === '0'
+const otelEndpoint = isRemote ? 'https://otel.meiermade.com' : 'https://otel.test'
 const testImage = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
 
 test.beforeEach(async ({ page }) => {
@@ -257,7 +258,7 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
       googleAnalyticsRequests.push(request.url())
     }
   })
-  await page.route('https://otel.test/**', async route => {
+  await page.route(`${otelEndpoint}/**`, async route => {
     otlpRequests.push(route.request().url())
     const body = route.request().postDataBuffer()
     if (body) otlpBodies.push(body)
@@ -283,7 +284,7 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
   await expect.poll(() =>
     otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_completed'))),
   ).toBe(true)
-  expect(otlpRequests.every(url => url === 'https://otel.test/v1/logs' || url === 'https://otel.test/v1/traces')).toBe(true)
+  expect(otlpRequests.every(url => url === `${otelEndpoint}/v1/logs` || url === `${otelEndpoint}/v1/traces`)).toBe(true)
   expect(googleAnalyticsRequests).toEqual([])
   expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).not.toBeNull()
 
