@@ -24,6 +24,21 @@ let private filtersFromRequest (ctx:HttpContext) =
           | true, year -> Some year
           | false, _ -> None) }
 
+let private articlesMetadata canonicalPath : PageMetadata =
+    { canonicalPath = canonicalPath
+      description = "Personal notes by Andy Meier about engineering, finance, and technology."
+      title = "Articles | Andy Meier" }
+
+let private articleMetadata (article:Article) : PageMetadata =
+    { canonicalPath = SiteUrl.article article.permalink
+      description = article.summary
+      title = $"{article.title} | Andy Meier" }
+
+let private notFoundMetadata canonicalPath : PageMetadata =
+    { canonicalPath = canonicalPath
+      description = "The requested article could not be found."
+      title = "Article not found | Andy Meier" }
+
 let filterArticles (filters:FilterState) (articles:Article list) =
     let matchesSearch (article:Article) =
         filters.search
@@ -62,14 +77,13 @@ let private getArticlesPage (services:Services) : HttpHandler =
                   years = allArticles |> List.map (fun article -> article.createdAt.Year) |> List.distinct |> List.sortDescending }
                 |> articlesPage
 
+            let metadata = articlesMetadata canonicalUrl
             if ctx.IsDatastar then
                 let ds = ctx.GetService<IDatastarService>()
-                do! patchSignals ds {| selectedNav = "nav-articles" |}
-                do! patchElement ds page
-                do! pushUrl ds canonicalUrl
+                do! patchPage ctx ds metadata page "nav-articles"
                 return Some ctx
             else
-                return! renderPage services page "nav-articles" next ctx
+                return! renderPage services metadata page "nav-articles" next ctx
     }
 
 let private getArticlePage (services:Services) (id:string) : HttpHandler =
@@ -78,24 +92,23 @@ let private getArticlePage (services:Services) (id:string) : HttpHandler =
         match Catalog.tryFind id with
         | Some article ->
             let page = article.page
-            let url = SiteUrl.article article.permalink
+            let metadata = articleMetadata article
 
             if ctx.IsDatastar then
                 let ds = ctx.GetService<IDatastarService>()
-                do! patchSignals ds {| selectedNav = "nav-articles" |}
-                do! patchElement ds page
-                do! pushUrl ds url
+                do! patchPage ctx ds metadata page "nav-articles"
                 return Some ctx
             else
-                return! renderPage services page "nav-articles" next ctx
+                return! renderPage services metadata page "nav-articles" next ctx
         | None ->
             let page = notFoundPage
+            let metadata = notFoundMetadata ctx.Request.Path.Value
             if ctx.IsDatastar then
                 let ds = ctx.GetService<IDatastarService>()
-                do! patchElement ds page
+                do! patchPage ctx ds metadata page "nav-articles"
                 return Some ctx
             else
-                return! renderPage services page "nav-articles" next ctx
+                return! renderPage services metadata page "nav-articles" next ctx
     }
 
 let handler (services:Services) : HttpHandler =

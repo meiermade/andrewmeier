@@ -40,6 +40,72 @@ test('homepage renders recent articles', async ({ page }) => {
   await expect(page.getByRole('progressbar', { name: 'Article reading progress' })).toBeHidden()
 })
 
+test('internal navigation updates metadata and restores browser history', async ({ page }) => {
+  const datastarRequests: string[] = []
+  page.on('request', request => {
+    if (request.headers()['datastar-request'] === 'true') datastarRequests.push(new URL(request.url()).pathname)
+  })
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+  const documentMarker = await page.evaluate(() => {
+    const marker = crypto.randomUUID()
+    ;(window as Window & { documentMarker?: string }).documentMarker = marker
+    return marker
+  })
+
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+  await expect(page.locator('#nav-articles')).toHaveAttribute('href', '/articles')
+  await page.locator('#nav-articles').click()
+  await expect(page).toHaveURL('/articles')
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
+  await expect(page).toHaveTitle('Articles | Andy Meier')
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://andymeier.dev/articles')
+  await expect(page.locator('#page-content')).toBeFocused()
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+  expect(await page.evaluate(() => (window as Window & { documentMarker?: string }).documentMarker)).toBe(documentMarker)
+
+  await page.getByRole('link', { name: 'Personal Infrastructure', exact: true }).click()
+  await expect(page).toHaveURL('/articles/personal-infrastructure')
+  await expect(page.getByRole('heading', { name: 'Personal Infrastructure', exact: true }).first()).toBeVisible()
+  await expect(page).toHaveTitle('Personal Infrastructure | Andy Meier')
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://andymeier.dev/articles/personal-infrastructure')
+
+  await page.goBack()
+  await expect(page).toHaveURL('/articles')
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
+  await expect(page).toHaveTitle('Articles | Andy Meier')
+
+  await page.goBack()
+  await expect(page).toHaveURL('/')
+  await expect(page.getByRole('heading', { name: 'Andy Meier', exact: true })).toBeVisible()
+  await expect(page).toHaveTitle('Andy Meier')
+
+  await page.goForward()
+  await expect(page).toHaveURL('/articles')
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => (window as Window & { documentMarker?: string }).documentMarker)).toBe(documentMarker)
+  expect(datastarRequests).toEqual(['/articles', '/articles/personal-infrastructure', '/articles', '/', '/articles'])
+})
+
+test('internal links retain a full-document fallback without JavaScript', async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false })
+  await context.addCookies([{
+    name: 'analytics-consent',
+    value: 'v1.declined.2026-08-16.0',
+    url: siteBaseUrl,
+    sameSite: 'Lax',
+  }])
+  const page = await context.newPage()
+
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Articles', exact: true }).first().click()
+
+  await expect(page).toHaveURL('/articles')
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
+  await expect(page).toHaveTitle('Articles | Andy Meier')
+  await context.close()
+})
+
 test('personal infrastructure diagrams render after client-side navigation', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await page.getByRole('link', { name: 'Personal Infrastructure', exact: true }).click()
