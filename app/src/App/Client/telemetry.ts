@@ -10,6 +10,7 @@ import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs';
 import { BatchSpanProcessor, WebTracerProvider } from '@opentelemetry/sdk-trace-web';
+import { initializeConsent } from './consent';
 import { consentChoice, pathAttributes, sanitizedUrl, trafficAttributes } from './event-contract';
 
 const sessionKey = 'opentelemetry-session-id';
@@ -261,8 +262,6 @@ async function disable(): Promise<void> {
 
 declare global {
   interface Window {
-    loadOpenTelemetry: () => Promise<void>;
-    disableOpenTelemetry: () => Promise<void>;
     meiermadeTelemetry: {
       emit: (eventName: string, attributes?: Attributes) => void;
       trackPage: () => void;
@@ -270,11 +269,8 @@ declare global {
   }
 }
 
-window.loadOpenTelemetry = initialize;
-window.disableOpenTelemetry = disable;
 window.meiermadeTelemetry = { emit, trackPage };
-
-if (consentChoice(document.cookie) === 'accepted') void initialize();
+initializeConsent({ enable: initialize, disable });
 window.addEventListener('pagehide', (event) => {
   if (!event.persisted) void disable();
 });

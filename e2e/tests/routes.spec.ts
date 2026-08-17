@@ -295,14 +295,15 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
   expect(otlpRequests).toEqual([])
   expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
 
+  await page.getByRole('button', { name: 'Analytics settings' }).click()
   const consentResponse = page.waitForResponse(response =>
     response.url().endsWith('/privacy/consent') && response.request().method() === 'POST',
   )
-  await page.evaluate(async () => {
-    const consentWindow = window as Window & { setAnalyticsConsent: (value: string) => Promise<void> }
-    await consentWindow.setAnalyticsConsent('accepted')
-  })
+  await page.getByRole('button', { name: 'Accept analytics' }).click()
   expect((await consentResponse).status()).toBe(204)
+  expect(await page.evaluate(() =>
+    !('setAnalyticsConsent' in window) && !('loadOpenTelemetry' in window) && !('disableOpenTelemetry' in window),
+  )).toBe(true)
   await expect.poll(async () =>
     (await page.context().cookies()).find(cookie => cookie.name === 'analytics-consent')?.value,
   ).toMatch(/^v1[.]accepted[.]2026-08-16[.]\d+$/)

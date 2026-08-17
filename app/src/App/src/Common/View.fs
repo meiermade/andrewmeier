@@ -318,7 +318,6 @@ module Page =
 type Document =
     static member primary (page:HtmlElement, otelEndpoint:string, ?selectedNav:string) =
         let selectedNav = defaultArg selectedNav ""
-        let analyticsScript = App.Consent.clientScript
 
         html {
             _lang "en"
@@ -327,7 +326,6 @@ type Document =
                 meta { _charset "UTF-8" }
                 meta { _name "viewport"; _content "width=device-width, initial-scale=1.0" }
                 script { js "let t=localStorage.getItem('theme');if(t==='dark'||(!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.classList.add('dark')}" }
-                script { js analyticsScript }
                 script {
                     _id "browser-telemetry"
                     _type "module"
