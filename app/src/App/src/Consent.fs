@@ -35,7 +35,8 @@ let private isSameOrigin (ctx:HttpContext) =
     let fetchSite = ctx.Request.Headers["Sec-Fetch-Site"].ToString()
     match Uri.TryCreate(origin, UriKind.Absolute) with
     | true, originUri ->
-        String.Equals(originUri.Authority, ctx.Request.Host.Value, StringComparison.OrdinalIgnoreCase)
+        String.Equals(originUri.Scheme, ctx.Request.Scheme, StringComparison.OrdinalIgnoreCase)
+        && String.Equals(originUri.Authority, ctx.Request.Host.Value, StringComparison.OrdinalIgnoreCase)
         && not (String.Equals(fetchSite, "cross-site", StringComparison.OrdinalIgnoreCase))
     | false, _ -> false
 

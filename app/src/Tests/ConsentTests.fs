@@ -22,11 +22,11 @@ let private services =
         .AddSingleton<IHostEnvironment>(environment)
         .BuildServiceProvider()
 
-let private execute (contentType:string) (origin:string) (fetchSite:string) (body:string) = task {
+let private execute (scheme:string) (contentType:string) (origin:string) (fetchSite:string) (body:string) = task {
     let bytes = Encoding.UTF8.GetBytes(body)
     let context = DefaultHttpContext()
     context.RequestServices <- services
-    context.Request.Scheme <- "https"
+    context.Request.Scheme <- scheme
     context.Request.Host <- HostString("andymeier.dev")
     context.Request.ContentType <- contentType
     context.Request.ContentLength <- int64 bytes.Length
@@ -41,7 +41,7 @@ let private execute (contentType:string) (origin:string) (fetchSite:string) (bod
 }
 
 let private sameOrigin body =
-    execute "application/json" "https://andymeier.dev" "same-origin" body
+    execute "https" "application/json" "https://andymeier.dev" "same-origin" body
 
 let private setCookie (context:HttpContext) =
     context.Response.Headers.SetCookie.ToString().ToLowerInvariant()
@@ -63,15 +63,23 @@ let tests =
 
         testTask "rejects a cross-site consent request" {
             let! (context:HttpContext) =
-                execute "application/json" "https://attacker.example" "cross-site" "{\"analytics\":\"accepted\"}"
+                execute "https" "application/json" "https://attacker.example" "cross-site" "{\"analytics\":\"accepted\"}"
 
             Expect.equal context.Response.StatusCode StatusCodes.Status403Forbidden "Expected the same-origin boundary"
             Expect.isEmpty (setCookie context) "Expected no consent cookie"
         }
 
+        testTask "rejects a consent request with a mismatched scheme" {
+            let! (context:HttpContext) =
+                execute "http" "application/json" "https://andymeier.dev" "same-site" "{\"analytics\":\"accepted\"}"
+
+            Expect.equal context.Response.StatusCode StatusCodes.Status403Forbidden "Expected the complete same-origin boundary"
+            Expect.isEmpty (setCookie context) "Expected no consent cookie"
+        }
+
         testTask "rejects JSON sent with an unsupported content type" {
             let! (context:HttpContext) =
-                execute "text/plain" "https://andymeier.dev" "same-origin" "{\"analytics\":\"accepted\"}"
+                execute "https" "text/plain" "https://andymeier.dev" "same-origin" "{\"analytics\":\"accepted\"}"
 
             Expect.equal context.Response.StatusCode StatusCodes.Status415UnsupportedMediaType "Expected JSON content type enforcement"
             Expect.isEmpty (setCookie context) "Expected no consent cookie"

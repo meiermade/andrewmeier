@@ -250,6 +250,22 @@ test('navigation disclosures use native keyboard behavior without Tailwind Eleme
   await expect(navigationButton).toBeFocused()
 })
 
+test('consent endpoint honors the trusted forwarded scheme', async ({ request }) => {
+  const origin = new URL(siteBaseUrl)
+  origin.protocol = 'https:'
+  const response = await request.post('/privacy/consent', {
+    headers: {
+      'Content-Type': 'application/json',
+      'Origin': origin.origin,
+      'Sec-Fetch-Site': 'same-origin',
+      'X-Forwarded-Proto': 'https',
+    },
+    data: { analytics: 'declined' },
+  })
+
+  expect(response.status()).toBe(204)
+})
+
 test('ignores a legacy local analytics choice and asks again', async ({ page }) => {
   await page.context().clearCookies()
   await page.addInitScript(() => localStorage.setItem('analytics-consent', 'accepted'))
