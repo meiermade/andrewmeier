@@ -250,29 +250,26 @@ test('navigation disclosures use native keyboard behavior without Tailwind Eleme
   await expect(navigationButton).toBeFocused()
 })
 
-test('migrates a legacy local analytics choice to the server cookie', async ({ page }) => {
+test('ignores a legacy local analytics choice and asks again', async ({ page }) => {
   await page.context().clearCookies()
   await page.addInitScript(() => localStorage.setItem('analytics-consent', 'accepted'))
-  const otlpBodies: Buffer[] = []
+  const consentRequests: string[] = []
+  const otlpRequests: string[] = []
+  page.on('request', request => {
+    if (request.url().endsWith('/privacy/consent')) consentRequests.push(request.url())
+  })
   await page.route(`${otelEndpoint}/**`, async route => {
-    const body = route.request().postDataBuffer()
-    if (body) otlpBodies.push(body)
+    otlpRequests.push(route.request().url())
     await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })
   })
-  const consentResponse = page.waitForResponse(response =>
-    response.url().endsWith('/privacy/consent') && response.request().method() === 'POST',
-  )
 
   await page.goto('/articles/personal-infrastructure?utm_source=x&utm_medium=organic-social', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('dialog', { name: 'Optional analytics' })).toBeVisible()
+  await page.waitForTimeout(500)
 
-  expect((await consentResponse).status()).toBe(204)
-  await expect.poll(async () =>
-    (await page.context().cookies()).find(cookie => cookie.name === 'analytics-consent')?.value,
-  ).toMatch(/^v1[.]accepted[.]2026-08-16[.]\d+$/)
-  expect(await page.evaluate(() => localStorage.getItem('analytics-consent'))).toBeNull()
-  await expect.poll(() =>
-    otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_opened'))),
-  ).toBe(true)
+  expect(consentRequests).toEqual([])
+  expect(otlpRequests).toEqual([])
+  expect((await page.context().cookies()).find(cookie => cookie.name === 'analytics-consent')).toBeUndefined()
 })
 
 test('browser telemetry starts only after analytics consent', async ({ page }) => {

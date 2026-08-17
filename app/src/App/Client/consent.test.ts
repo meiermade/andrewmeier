@@ -3,19 +3,16 @@ import { createConsentController, type ConsentChoice } from './consent';
 
 function harness(options: {
   saved?: ConsentChoice;
-  legacy?: ConsentChoice;
   persistenceError?: boolean;
 } = {}) {
   const events: string[] = [];
   const controller = createConsentController({
     persistence: {
       readChoice: () => options.saved,
-      readLegacyChoice: () => options.legacy,
       persist: async choice => {
         events.push(`persist:${choice}`);
         if (options.persistenceError) throw new Error('unavailable');
       },
-      clearLegacyChoice: () => events.push('clear-legacy'),
       clearChoice: () => events.push('clear-cookie'),
     },
     lifecycle: {
@@ -48,7 +45,7 @@ describe('analytics consent controller', () => {
     await controller.setChoice('accepted');
 
     expect(events).toEqual([
-      'saving:true', 'hide-error', 'persist:accepted', 'clear-legacy',
+      'saving:true', 'hide-error', 'persist:accepted',
       'enable', 'hide', 'saving:false',
     ]);
   });
@@ -60,19 +57,24 @@ describe('analytics consent controller', () => {
 
     expect(events).toEqual([
       'saving:true', 'hide-error', 'disable', 'persist:declined',
-      'clear-legacy', 'hide', 'saving:false',
+      'hide', 'saving:false',
     ]);
   });
 
-  it('migrates a legacy choice through the server and fails closed', async () => {
-    const migrated = harness({ legacy: 'accepted' });
-    await migrated.controller.initialize();
-    expect(migrated.events).toContain('persist:accepted');
-    expect(migrated.events).toContain('clear-legacy');
+  it('shows the banner when no server choice exists', async () => {
+    const { controller, events } = harness();
 
-    const failed = harness({ persistenceError: true });
-    await failed.controller.setChoice('accepted');
-    expect(failed.events).toEqual([
+    await controller.initialize();
+
+    expect(events).toEqual(['show']);
+  });
+
+  it('fails closed when persistence fails', async () => {
+    const { controller, events } = harness({ persistenceError: true });
+
+    await controller.setChoice('accepted');
+
+    expect(events).toEqual([
       'saving:true', 'hide-error', 'persist:accepted', 'clear-cookie',
       'show-error', 'show', 'saving:false',
     ]);

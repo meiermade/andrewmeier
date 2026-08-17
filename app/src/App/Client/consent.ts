@@ -4,9 +4,7 @@ export type { ConsentChoice } from './event-contract';
 
 interface ConsentPersistence {
   readChoice: () => ConsentChoice | undefined;
-  readLegacyChoice: () => ConsentChoice | undefined;
   persist: (choice: ConsentChoice) => Promise<void>;
-  clearLegacyChoice: () => void;
   clearChoice: () => void;
 }
 
@@ -42,7 +40,6 @@ export function createConsentController(dependencies: {
     try {
       if (choice === 'declined') await lifecycle.disable();
       await persistence.persist(choice);
-      persistence.clearLegacyChoice();
       if (choice === 'accepted') await lifecycle.enable();
       view.hide();
     } catch {
@@ -62,17 +59,10 @@ export function createConsentController(dependencies: {
       return;
     }
 
-    const legacy = persistence.readLegacyChoice();
-    if (legacy) await setChoice(legacy);
-    else view.show();
+    view.show();
   }
 
   return { initialize, setChoice, showSettings: view.show };
-}
-
-function legacyChoice(): ConsentChoice | undefined {
-  const value = localStorage.getItem('analytics-consent');
-  return value === 'accepted' || value === 'declined' ? value : undefined;
 }
 
 export function initializeConsent(lifecycle: AnalyticsLifecycle): void {
@@ -85,7 +75,6 @@ export function initializeConsent(lifecycle: AnalyticsLifecycle): void {
     const controller = createConsentController({
       persistence: {
         readChoice: () => consentChoice(document.cookie),
-        readLegacyChoice: legacyChoice,
         persist: async choice => {
           const response = await fetch('/privacy/consent', {
             method: 'POST',
@@ -94,7 +83,6 @@ export function initializeConsent(lifecycle: AnalyticsLifecycle): void {
           });
           if (!response.ok) throw new Error('Unable to save analytics preference.');
         },
-        clearLegacyChoice: () => localStorage.removeItem('analytics-consent'),
         clearChoice: () => {
           document.cookie = 'analytics-consent=; Max-Age=0; Path=/; SameSite=Lax';
         },
