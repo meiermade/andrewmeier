@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 const isRemote = process.env.E2E_START_LOCAL === '0'
+const siteBaseUrl = process.env.SITE_E2E_BASE_URL ?? (isRemote ? 'https://andymeier.dev' : `http://127.0.0.1:${process.env.E2E_SERVER_PORT ?? '5051'}`)
 const otelEndpoint = isRemote ? 'https://otel.meiermade.com' : 'https://otel.test'
 const testImage = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
 
@@ -11,11 +12,12 @@ test.beforeEach(async ({ page }) => {
     )
   }
 
-  await page.addInitScript(() => {
-    if (localStorage.getItem('analytics-consent') === null) {
-      localStorage.setItem('analytics-consent', 'declined')
-    }
-  })
+  await page.context().addCookies([{
+    name: 'analytics-consent',
+    value: 'v1.declined.2026-08-16.0',
+    url: siteBaseUrl,
+    sameSite: 'Lax',
+  }])
 })
 
 test('homepage renders recent articles', async ({ page }) => {
@@ -248,6 +250,77 @@ test('navigation disclosures use native keyboard behavior without Tailwind Eleme
   await expect(navigationButton).toBeFocused()
 })
 
+test('consent endpoint honors the trusted forwarded scheme', async ({ request }) => {
+  const origin = new URL(siteBaseUrl)
+  origin.protocol = 'https:'
+  const response = await request.post('/privacy/consent', {
+    headers: {
+      'Content-Type': 'application/json',
+      'Origin': origin.origin,
+      'Sec-Fetch-Site': 'same-origin',
+      'X-Forwarded-Proto': 'https',
+    },
+    data: { analytics: 'declined' },
+  })
+
+  expect(response.status()).toBe(204)
+})
+
+test('ignores a legacy local analytics choice and asks again', async ({ page }) => {
+  await page.context().clearCookies()
+  await page.addInitScript(() => localStorage.setItem('analytics-consent', 'accepted'))
+  const consentRequests: string[] = []
+  const otlpRequests: string[] = []
+  page.on('request', request => {
+    if (request.url().endsWith('/privacy/consent')) consentRequests.push(request.url())
+  })
+  await page.route(`${otelEndpoint}/**`, async route => {
+    otlpRequests.push(route.request().url())
+    await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })
+  })
+
+  await page.goto('/articles/personal-infrastructure?utm_source=x&utm_medium=organic-social', { waitUntil: 'domcontentloaded' })
+  await expect(page.getByRole('dialog', { name: 'Optional analytics' })).toBeVisible()
+  await page.waitForTimeout(500)
+
+  expect(consentRequests).toEqual([])
+  expect(otlpRequests).toEqual([])
+  expect((await page.context().cookies()).find(cookie => cookie.name === 'analytics-consent')).toBeUndefined()
+})
+
+test('invalid consent cookies fail closed and keep the controls usable', async ({ page }) => {
+  for (const value of ['%', 'v1.accepted.2025-01-01.0']) {
+    await page.context().clearCookies()
+    await page.context().addCookies([{ name: 'analytics-consent', value, url: siteBaseUrl, sameSite: 'Lax' }])
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('dialog', { name: 'Optional analytics' })).toBeVisible()
+    const consentResponse = page.waitForResponse(response =>
+      response.url().endsWith('/privacy/consent') && response.request().method() === 'POST',
+    )
+    await page.getByRole('button', { name: 'Accept analytics' }).click()
+    expect((await consentResponse).status()).toBe(204)
+  }
+})
+
+test('analytics choices keep mobile visual and keyboard order aligned', async ({ page }) => {
+  await page.context().clearCookies()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  const decline = page.getByRole('button', { name: 'Decline' })
+  const accept = page.getByRole('button', { name: 'Accept analytics' })
+  const declineBox = await decline.boundingBox()
+  const acceptBox = await accept.boundingBox()
+  expect(declineBox?.y).toBeLessThan(acceptBox?.y ?? 0)
+
+  await page.getByRole('button', { name: 'Analytics settings' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(decline).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(accept).toBeFocused()
+})
+
 test('browser telemetry starts only after analytics consent', async ({ page }) => {
   const googleAnalyticsRequests: string[] = []
   const otlpRequests: string[] = []
@@ -264,19 +337,37 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
     if (body) otlpBodies.push(body)
     await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })
   })
-  await page.goto('/articles/personal-infrastructure', { waitUntil: 'domcontentloaded' })
+  await page.goto('/?utm_source=linkedin&utm_medium=organic-social&utm_campaign=personal-infrastructure&utm_content=post-01&email=private%40example.com', { waitUntil: 'domcontentloaded' })
   expect(otlpRequests).toEqual([])
   expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
+  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-traffic-attribution'))).toBeNull()
 
-  await page.evaluate(() => {
-    const consentWindow = window as Window & { setAnalyticsConsent: (value: string) => void }
-    consentWindow.setAnalyticsConsent('accepted')
-  })
+  await page.getByRole('link', { name: 'Personal Infrastructure', exact: true }).click()
+  await expect(page).toHaveURL('/articles/personal-infrastructure')
+  expect(otlpRequests).toEqual([])
+
+  await page.getByRole('button', { name: 'Analytics settings' }).click()
+  const consentResponse = page.waitForResponse(response =>
+    response.url().endsWith('/privacy/consent') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: 'Accept analytics' }).click()
+  expect((await consentResponse).status()).toBe(204)
+  expect(await page.evaluate(() =>
+    !('setAnalyticsConsent' in window) && !('loadOpenTelemetry' in window) && !('disableOpenTelemetry' in window),
+  )).toBe(true)
+  await expect.poll(async () =>
+    (await page.context().cookies()).find(cookie => cookie.name === 'analytics-consent')?.value,
+  ).toMatch(/^v1[.]accepted[.]2026-08-16[.]\d+$/)
+  expect(await page.evaluate(() => localStorage.getItem('analytics-consent'))).toBeNull()
 
   await expect.poll(() => otlpRequests.length).toBeGreaterThan(0)
   await expect.poll(() =>
     otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_opened'))),
   ).toBe(true)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.traffic.source')))).toBe(true)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('linkedin')))).toBe(true)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('personal-infrastructure')))).toBe(true)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('private@example.com')))).toBe(false)
   await page.waitForTimeout(1500)
   expect(otlpBodies.some(body => body.includes(Buffer.from('browser.web_vital')))).toBe(false)
 
@@ -286,13 +377,35 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
   ).toBe(true)
   expect(otlpRequests.every(url => url === `${otelEndpoint}/v1/logs` || url === `${otelEndpoint}/v1/traces`)).toBe(true)
   expect(googleAnalyticsRequests).toEqual([])
-  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).not.toBeNull()
+  const firstSessionId = await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))
+  expect(firstSessionId).not.toBeNull()
+
+  otlpBodies.length = 0
+  await page.goto('/articles/dev-env', { waitUntil: 'domcontentloaded' })
+  await expect.poll(() =>
+    otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_opened'))),
+  ).toBe(true)
+  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBe(firstSessionId)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('linkedin')))).toBe(true)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('personal-infrastructure')))).toBe(true)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('direct')))).toBe(false)
 
   otlpBodies.length = 0
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect.poll(() =>
     otlpBodies.some(body => body.includes(Buffer.from('browser.web_vital'))),
   ).toBe(true)
+
+  await page.getByRole('button', { name: 'Analytics settings' }).click()
+  const declineResponse = page.waitForResponse(response =>
+    response.url().endsWith('/privacy/consent') && response.request().method() === 'POST',
+  )
+  await page.getByRole('button', { name: 'Decline' }).click()
+  expect((await declineResponse).status()).toBe(204)
+  await expect.poll(async () =>
+    (await page.context().cookies()).find(cookie => cookie.name === 'analytics-consent')?.value,
+  ).toMatch(/^v1[.]declined[.]2026-08-16[.]\d+$/)
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
 })
 
 test('legacy company paths permanently redirect to Meier Made', async ({ request }) => {

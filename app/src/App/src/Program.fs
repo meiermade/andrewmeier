@@ -3,6 +3,7 @@ open App.ServiceRegistry
 open Giraffe
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
+open Microsoft.AspNetCore.HttpOverrides
 open Microsoft.Extensions.DependencyInjection
 open OpenTelemetry
 open OpenTelemetry.Exporter
@@ -22,7 +23,8 @@ let configureTracerProvider (config: Config) =
         .ConfigureResource(fun resourceBuilder ->
             resourceBuilder.AddService(serviceName = config.appName) |> ignore)
         .AddAspNetCoreInstrumentation(fun opts ->
-            opts.Filter <- fun ctx -> ctx.Request.Path.Value <> "/health")
+            opts.Filter <- fun ctx -> ctx.Request.Path.Value <> "/health"
+            opts.EnrichWithHttpRequest <- fun activity _ -> Telemetry.removeUrlQuery activity)
         .AddHttpClientInstrumentation()
         .AddOtlpExporter(fun opts ->
             opts.Endpoint <- Uri(config.openTelemetry.endpoint + "/v1/traces")
@@ -69,6 +71,11 @@ let configureServices (serviceCollection: IServiceCollection) (tracerProvider: T
     serviceCollection.AddDatastar() |> ignore
     serviceCollection.AddGiraffe() |> ignore
 
+let private forwardedHeadersOptions =
+    let options = ForwardedHeadersOptions()
+    options.ForwardedHeaders <- ForwardedHeaders.XForwardedProto
+    options
+
 let private addSecurityHeaders (ctx:HttpContext) =
     ctx.Response.Headers["Content-Security-Policy"] <- "base-uri 'self'; frame-ancestors 'none'; object-src 'none'"
     ctx.Response.Headers["Permissions-Policy"] <- "camera=(), geolocation=(), microphone=()"
@@ -78,6 +85,7 @@ let private addSecurityHeaders (ctx:HttpContext) =
 
 let configureApp (services: Services) (app: WebApplication) =
     app
+        .UseForwardedHeaders(forwardedHeadersOptions)
         .Use(fun (ctx:HttpContext) (next:RequestDelegate) ->
             addSecurityHeaders ctx
             next.Invoke ctx)

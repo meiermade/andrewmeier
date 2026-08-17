@@ -8,9 +8,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Content Include="paket.references" />
+    <Compile Include="ConsentTests.fs" />
     <Compile Include="ArticleFilterTests.fs" />
     <Compile Include="ArticleCatalogTests.fs" />
     <Compile Include="ViewTests.fs" />
+    <Compile Include="TelemetryTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

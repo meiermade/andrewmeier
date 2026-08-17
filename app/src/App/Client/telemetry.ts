@@ -10,11 +10,13 @@ import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs';
 import { BatchSpanProcessor, WebTracerProvider } from '@opentelemetry/sdk-trace-web';
-import { pathAttributes, sanitizedUrl } from './event-contract';
+import { initializeConsent } from './consent';
+import { consentChoice, pathAttributes, sanitizedUrl, trafficAttributes } from './event-contract';
 
-const consentKey = 'analytics-consent';
 const sessionKey = 'opentelemetry-session-id';
-const analyticsConsentWasPreviouslyGranted = localStorage.getItem(consentKey) === 'accepted';
+const attributionKey = 'opentelemetry-traffic-attribution';
+const analyticsConsentWasPreviouslyGranted = consentChoice(document.cookie) === 'accepted';
+const initialAttribution = trafficAttributes(window.location.href, document.referrer);
 const script = document.getElementById('browser-telemetry') as HTMLScriptElement | null;
 const endpoint = script?.dataset.otelEndpoint?.replace(/\/$/, '');
 const completedArticles = new Set<string>();
@@ -26,6 +28,7 @@ let logger: ReturnType<typeof logs.getLogger> | undefined;
 let initialization: Promise<void> | undefined;
 let clickHandler: ((event: MouseEvent) => void) | undefined;
 let lastTrackedPath: string | undefined;
+let sessionAttribution: Attributes | undefined;
 
 function sessionId(): string {
   const existing = sessionStorage.getItem(sessionKey);
@@ -36,8 +39,27 @@ function sessionId(): string {
   return created;
 }
 
+function attributionAttributes(): Attributes {
+  if (sessionAttribution) return sessionAttribution;
+
+  const stored = sessionStorage.getItem(attributionKey);
+  if (stored) {
+    try {
+      sessionAttribution = JSON.parse(stored) as Attributes;
+      return sessionAttribution;
+    } catch {
+      sessionStorage.removeItem(attributionKey);
+    }
+  }
+
+  sessionAttribution = initialAttribution;
+  sessionStorage.setItem(attributionKey, JSON.stringify(sessionAttribution));
+  return sessionAttribution;
+}
+
 function commonAttributes(): Attributes {
   return {
+    ...attributionAttributes(),
     'session.id': sessionId(),
     'url.path': window.location.pathname,
   };
@@ -85,6 +107,8 @@ function trackArticleCompletion(): void {
 }
 
 function trackPage(): void {
+  if (!logger) return;
+
   const path = window.location.pathname;
   if (path === lastTrackedPath) return;
   lastTrackedPath = path;
@@ -130,7 +154,7 @@ function flushWhenHidden(): void {
 }
 
 async function initialize(): Promise<void> {
-  if (!endpoint || loggerProvider || localStorage.getItem(consentKey) !== 'accepted') return;
+  if (!endpoint || loggerProvider || consentChoice(document.cookie) !== 'accepted') return;
   if (initialization) return initialization;
 
   initialization = (async () => {
@@ -213,7 +237,7 @@ async function initialize(): Promise<void> {
   return initialization;
 }
 
-async function disable(): Promise<void> {
+async function stop(): Promise<void> {
   if (clickHandler) document.removeEventListener('click', clickHandler, true);
   clickHandler = undefined;
   window.removeEventListener('scroll', trackArticleCompletion);
@@ -234,13 +258,17 @@ async function disable(): Promise<void> {
   logs.disable();
   trace.disable();
   context.disable();
+}
+
+async function disable(): Promise<void> {
+  await stop();
+  sessionAttribution = undefined;
   sessionStorage.removeItem(sessionKey);
+  sessionStorage.removeItem(attributionKey);
 }
 
 declare global {
   interface Window {
-    loadOpenTelemetry: () => Promise<void>;
-    disableOpenTelemetry: () => Promise<void>;
     meiermadeTelemetry: {
       emit: (eventName: string, attributes?: Attributes) => void;
       trackPage: () => void;
@@ -248,11 +276,8 @@ declare global {
   }
 }
 
-window.loadOpenTelemetry = initialize;
-window.disableOpenTelemetry = disable;
 window.meiermadeTelemetry = { emit, trackPage };
-
-if (localStorage.getItem(consentKey) === 'accepted') void initialize();
+initializeConsent({ enable: initialize, disable });
 window.addEventListener('pagehide', (event) => {
-  if (!event.persisted) void disable();
+  if (!event.persisted) void stop();
 });
