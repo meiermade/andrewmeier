@@ -16,6 +16,7 @@ import { consentChoice, pathAttributes, sanitizedUrl, trafficAttributes } from '
 const sessionKey = 'opentelemetry-session-id';
 const attributionKey = 'opentelemetry-traffic-attribution';
 const analyticsConsentWasPreviouslyGranted = consentChoice(document.cookie) === 'accepted';
+const initialAttribution = trafficAttributes(window.location.href, document.referrer);
 const script = document.getElementById('browser-telemetry') as HTMLScriptElement | null;
 const endpoint = script?.dataset.otelEndpoint?.replace(/\/$/, '');
 const completedArticles = new Set<string>();
@@ -51,7 +52,7 @@ function attributionAttributes(): Attributes {
     }
   }
 
-  sessionAttribution = trafficAttributes(window.location.href, document.referrer);
+  sessionAttribution = initialAttribution;
   sessionStorage.setItem(attributionKey, JSON.stringify(sessionAttribution));
   return sessionAttribution;
 }
@@ -106,6 +107,8 @@ function trackArticleCompletion(): void {
 }
 
 function trackPage(): void {
+  if (!logger) return;
+
   const path = window.location.pathname;
   if (path === lastTrackedPath) return;
   lastTrackedPath = path;

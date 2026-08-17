@@ -20,9 +20,13 @@ export function consentChoice(cookieHeader: string): ConsentChoice | undefined {
     .find(value => value.startsWith('analytics-consent='));
   if (!cookie) return undefined;
 
-  const value = decodeURIComponent(cookie.slice('analytics-consent='.length));
-  const match = /^v1\.(accepted|declined)\.\d{4}-\d{2}-\d{2}\.\d+$/.exec(value);
-  return match?.[1] as ConsentChoice | undefined;
+  try {
+    const value = decodeURIComponent(cookie.slice('analytics-consent='.length));
+    const match = /^v1\.(accepted|declined)\.2026-08-16\.\d+$/.exec(value);
+    return match?.[1] as ConsentChoice | undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function normalizedSource(value: string): string {

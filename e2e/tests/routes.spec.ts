@@ -272,6 +272,39 @@ test('ignores a legacy local analytics choice and asks again', async ({ page }) 
   expect((await page.context().cookies()).find(cookie => cookie.name === 'analytics-consent')).toBeUndefined()
 })
 
+test('invalid consent cookies fail closed and keep the controls usable', async ({ page }) => {
+  for (const value of ['%', 'v1.accepted.2025-01-01.0']) {
+    await page.context().clearCookies()
+    await page.context().addCookies([{ name: 'analytics-consent', value, url: siteBaseUrl, sameSite: 'Lax' }])
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('dialog', { name: 'Optional analytics' })).toBeVisible()
+    const consentResponse = page.waitForResponse(response =>
+      response.url().endsWith('/privacy/consent') && response.request().method() === 'POST',
+    )
+    await page.getByRole('button', { name: 'Accept analytics' }).click()
+    expect((await consentResponse).status()).toBe(204)
+  }
+})
+
+test('analytics choices keep mobile visual and keyboard order aligned', async ({ page }) => {
+  await page.context().clearCookies()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  const decline = page.getByRole('button', { name: 'Decline' })
+  const accept = page.getByRole('button', { name: 'Accept analytics' })
+  const declineBox = await decline.boundingBox()
+  const acceptBox = await accept.boundingBox()
+  expect(declineBox?.y).toBeLessThan(acceptBox?.y ?? 0)
+
+  await page.getByRole('button', { name: 'Analytics settings' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(decline).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(accept).toBeFocused()
+})
+
 test('browser telemetry starts only after analytics consent', async ({ page }) => {
   const googleAnalyticsRequests: string[] = []
   const otlpRequests: string[] = []
@@ -288,9 +321,14 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
     if (body) otlpBodies.push(body)
     await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })
   })
-  await page.goto('/articles/personal-infrastructure?utm_source=linkedin&utm_medium=organic-social&utm_campaign=personal-infrastructure&utm_content=post-01&email=private%40example.com', { waitUntil: 'domcontentloaded' })
+  await page.goto('/?utm_source=linkedin&utm_medium=organic-social&utm_campaign=personal-infrastructure&utm_content=post-01&email=private%40example.com', { waitUntil: 'domcontentloaded' })
   expect(otlpRequests).toEqual([])
   expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
+  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-traffic-attribution'))).toBeNull()
+
+  await page.getByRole('link', { name: 'Personal Infrastructure', exact: true }).click()
+  await expect(page).toHaveURL('/articles/personal-infrastructure')
+  expect(otlpRequests).toEqual([])
 
   await page.getByRole('button', { name: 'Analytics settings' }).click()
   const consentResponse = page.waitForResponse(response =>

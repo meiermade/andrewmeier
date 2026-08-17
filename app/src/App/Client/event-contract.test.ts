@@ -15,6 +15,8 @@ describe('browser telemetry event contract', () => {
     expect(consentChoice('theme=dark; analytics-consent=v1.accepted.2026-08-16.1786872000')).toBe('accepted');
     expect(consentChoice('analytics-consent=v1.declined.2026-08-16.1786872000')).toBe('declined');
     expect(consentChoice('analytics-consent=accepted')).toBeUndefined();
+    expect(consentChoice('analytics-consent=v1.accepted.2025-01-01.0')).toBeUndefined();
+    expect(consentChoice('analytics-consent=%')).toBeUndefined();
   });
 
   it('turns campaign parameters into bounded attribution attributes', () => {

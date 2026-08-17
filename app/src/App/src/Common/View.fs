@@ -370,7 +370,7 @@ type Document =
                             _class "mt-3 hidden text-sm/6 font-medium text-red-700 dark:text-red-300"
                         }
                         div {
-                            _class "mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end"
+                            _class "mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end"
                             button {
                                 _id "analytics-reject"
                                 _type "button"
