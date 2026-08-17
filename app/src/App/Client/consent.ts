@@ -43,6 +43,7 @@ export function createConsentController(dependencies: {
       if (choice === 'accepted') await lifecycle.enable();
       view.hide();
     } catch {
+      await lifecycle.disable().catch(() => undefined);
       persistence.clearChoice();
       view.showError();
       view.show();

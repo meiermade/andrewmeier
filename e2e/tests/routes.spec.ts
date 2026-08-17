@@ -361,7 +361,18 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
   ).toBe(true)
   expect(otlpRequests.every(url => url === `${otelEndpoint}/v1/logs` || url === `${otelEndpoint}/v1/traces`)).toBe(true)
   expect(googleAnalyticsRequests).toEqual([])
-  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).not.toBeNull()
+  const firstSessionId = await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))
+  expect(firstSessionId).not.toBeNull()
+
+  otlpBodies.length = 0
+  await page.goto('/articles/dev-env', { waitUntil: 'domcontentloaded' })
+  await expect.poll(() =>
+    otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_opened'))),
+  ).toBe(true)
+  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBe(firstSessionId)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('linkedin')))).toBe(true)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('personal-infrastructure')))).toBe(true)
+  expect(otlpBodies.some(body => body.includes(Buffer.from('direct')))).toBe(false)
 
   otlpBodies.length = 0
   await page.reload({ waitUntil: 'domcontentloaded' })

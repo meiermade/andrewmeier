@@ -4,6 +4,7 @@ import { createConsentController, type ConsentChoice } from './consent';
 function harness(options: {
   saved?: ConsentChoice;
   persistenceError?: boolean;
+  enableError?: boolean;
 } = {}) {
   const events: string[] = [];
   const controller = createConsentController({
@@ -16,7 +17,10 @@ function harness(options: {
       clearChoice: () => events.push('clear-cookie'),
     },
     lifecycle: {
-      enable: async () => { events.push('enable'); },
+      enable: async () => {
+        events.push('enable');
+        if (options.enableError) throw new Error('partially activated');
+      },
       disable: async () => { events.push('disable'); },
     },
     view: {
@@ -69,13 +73,24 @@ describe('analytics consent controller', () => {
     expect(events).toEqual(['show']);
   });
 
+  it('rolls back partially activated analytics when enabling fails', async () => {
+    const { controller, events } = harness({ enableError: true });
+
+    await controller.setChoice('accepted');
+
+    expect(events).toEqual([
+      'saving:true', 'hide-error', 'persist:accepted', 'enable', 'disable',
+      'clear-cookie', 'show-error', 'show', 'saving:false',
+    ]);
+  });
+
   it('fails closed when persistence fails', async () => {
     const { controller, events } = harness({ persistenceError: true });
 
     await controller.setChoice('accepted');
 
     expect(events).toEqual([
-      'saving:true', 'hide-error', 'persist:accepted', 'clear-cookie',
+      'saving:true', 'hide-error', 'persist:accepted', 'disable', 'clear-cookie',
       'show-error', 'show', 'saving:false',
     ]);
   });

@@ -237,7 +237,7 @@ async function initialize(): Promise<void> {
   return initialization;
 }
 
-async function disable(): Promise<void> {
+async function stop(): Promise<void> {
   if (clickHandler) document.removeEventListener('click', clickHandler, true);
   clickHandler = undefined;
   window.removeEventListener('scroll', trackArticleCompletion);
@@ -255,10 +255,14 @@ async function disable(): Promise<void> {
   loggerProvider = undefined;
   tracerProvider = undefined;
   lastTrackedPath = undefined;
-  sessionAttribution = undefined;
   logs.disable();
   trace.disable();
   context.disable();
+}
+
+async function disable(): Promise<void> {
+  await stop();
+  sessionAttribution = undefined;
   sessionStorage.removeItem(sessionKey);
   sessionStorage.removeItem(attributionKey);
 }
@@ -275,5 +279,5 @@ declare global {
 window.meiermadeTelemetry = { emit, trackPage };
 initializeConsent({ enable: initialize, disable });
 window.addEventListener('pagehide', (event) => {
-  if (!event.persisted) void disable();
+  if (!event.persisted) void stop();
 });
