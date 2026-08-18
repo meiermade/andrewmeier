@@ -35,6 +35,17 @@ module Asset =
     let fingerprinted (path:string) =
         resolveWithManifest manifest.Value path
 
+module Navigation =
+    let initialize = "window.history.scrollRestoration = 'manual'"
+
+    let action (href:string) =
+        let url = JsonSerializer.Serialize href
+        let request = $"@get({url}, {{filterSignals: {{include: /^$/}}, headers: {{'X-MeierMade-Navigation': 'push'}}}})"
+        $"evt.button === 0 && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && !evt.altKey && !evt.currentTarget.hasAttribute('download') && (!evt.currentTarget.target || evt.currentTarget.target === '_self') && evt.currentTarget.origin === window.location.origin && (evt.preventDefault(), {url} === window.location.pathname + window.location.search || (window.history.replaceState(Object.assign({{}}, window.history.state || {{}}, {{meierMadeScrollX: window.scrollX, meierMadeScrollY: window.scrollY}}), '', window.location.href), {request}))"
+
+    let restoreAction =
+        "@get(window.location.pathname + window.location.search, {filterSignals: {include: /^$/}, headers: {'X-MeierMade-Navigation': 'restore'}})"
+
 module PageHead =
     let canonicalUrl (metadata:PageMetadata) =
         $"https://andymeier.dev{metadata.canonicalPath}"
@@ -214,7 +225,7 @@ module Footer =
             div { _class "grow" }
             div {
                 _class "text-sm flex flex-col space-y-1"
-                a { _href "/articles"; _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click__prevent", "@get('/articles')"); "Articles" }
+                a { _href "/articles"; _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", Navigation.action "/articles"); "Articles" }
                 a { _href "https://meiermade.com"; _class "whitespace-nowrap underline hover:text-emerald-600 dark:hover:text-emerald-400"; "Meier Made" }
                 button {
                     _id "analytics-settings"
@@ -241,7 +252,7 @@ module TopNav =
             _dataClass ("dark:text-emerald-400", $"$selectedNav == '{id}'")
             _dataClass ("text-gray-800", $"$selectedNav != '{id}'")
             _dataClass ("dark:text-gray-200", $"$selectedNav != '{id}'")
-            _dataOn ("click__prevent", $"@get('{href}')")
+            _dataOn ("click", Navigation.action href)
             el
         }
 
@@ -255,7 +266,7 @@ module TopNav =
             _dataClass ("font-semibold", $"$selectedNav == '{id}'")
             _dataClass ("text-gray-700", $"$selectedNav != '{id}'")
             _dataClass ("dark:text-gray-300", $"$selectedNav != '{id}'")
-            _dataOn ("click__prevent", $"@get('{href}')")
+            _dataOn ("click", Navigation.action href)
             text label
         }
 
@@ -379,7 +390,8 @@ type Document =
                 script { _type "module"; _src (Asset.fingerprinted "/scripts/datastar.1.0.2.js") }
             }
             body {
-                _dataOn ("popstate__window", "@get(window.location.pathname + window.location.search, {headers: {'X-MeierMade-Navigation': 'restore'}})")
+                _dataInit Navigation.initialize
+                _dataOn ("popstate__window", Navigation.restoreAction)
                 _dataSignals $"{{selectedNav: '{selectedNav}'}}"
                 _class "bg-gray-200 dark:bg-gray-950"
                 div {

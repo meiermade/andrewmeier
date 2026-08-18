@@ -52,6 +52,8 @@ let tests =
                 let navigation = Render.toHtmlDocString TopNav.primary
 
                 Expect.stringContains navigation "href=\"/articles\"" "Expected progressive navigation links"
+                Expect.stringContains navigation "!evt.ctrlKey" "Expected modified clicks to retain native anchor behavior"
+                Expect.isFalse (navigation.Contains "click__prevent") "Expected default navigation to be prevented only for eligible clicks"
                 Expect.stringContains navigation "data-disclosure-root" "Expected hand-rolled Datastar disclosures"
                 Expect.stringContains navigation "aria-expanded" "Expected accessible disclosure triggers"
                 Expect.stringContains navigation "aria-controls" "Expected triggers to identify disclosure panels"
@@ -214,6 +216,7 @@ let tests =
                 Expect.stringContains html "id=\"canonical-url\" rel=\"canonical\" href=\"https://andymeier.dev/\"" "Expected patchable canonical URL"
                 Expect.stringContains html "id=\"page-content\" tabindex=\"-1\"" "Expected a stable, focusable patch root"
                 Expect.stringContains html "data-on:popstate__window=" "Expected browser history restoration"
+                Expect.stringContains html "window.history.scrollRestoration = &#39;manual&#39;" "Expected application-controlled history scroll restoration"
                 Expect.stringContains html "selectedNav: &#39;nav-home&#39;" "Expected encoded nav signal to render"
                 Expect.stringContains html "cookie-consent-banner" "Expected consent banner"
                 Expect.stringContains html "analytics-consent-title" "Expected consent dialog title"

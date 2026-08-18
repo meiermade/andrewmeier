@@ -57,7 +57,7 @@ let homePage (recentArticles:Article list) =
                     a {
                         _href "/articles"
                         _class "text-sm text-emerald-600 hover:underline hover:cursor-pointer dark:text-emerald-400"
-                        _dataOn ("click__prevent", "@get('/articles')")
+                        _dataOn ("click", Navigation.action "/articles")
                         "View all"
                     }
                 }

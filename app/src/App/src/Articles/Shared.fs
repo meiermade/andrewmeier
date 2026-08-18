@@ -50,7 +50,7 @@ module ArticleCard =
 
                 a {
                     _href url
-                    _dataOn ("click__prevent", $"@get('{url}')")
+                    _dataOn ("click", Navigation.action url)
                     _class "hover:text-emerald-600 dark:hover:text-emerald-400"
                     article'.title
                 }
