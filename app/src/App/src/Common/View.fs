@@ -38,10 +38,13 @@ module Asset =
 module Navigation =
     let initialize = "window.history.scrollRestoration = 'manual'"
 
+    let saveScroll =
+        "window.history.replaceState(Object.assign({}, window.history.state || {}, {meierMadeScrollX: window.scrollX, meierMadeScrollY: window.scrollY}), '', window.location.href)"
+
     let action (href:string) =
         let url = JsonSerializer.Serialize href
         let request = $"@get({url}, {{filterSignals: {{include: /^$/}}, headers: {{'X-MeierMade-Navigation': 'push'}}}})"
-        $"evt.button === 0 && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && !evt.altKey && !evt.currentTarget.hasAttribute('download') && (!evt.currentTarget.target || evt.currentTarget.target === '_self') && evt.currentTarget.origin === window.location.origin && (evt.preventDefault(), {url} === window.location.pathname + window.location.search || (window.history.replaceState(Object.assign({{}}, window.history.state || {{}}, {{meierMadeScrollX: window.scrollX, meierMadeScrollY: window.scrollY}}), '', window.location.href), {request}))"
+        $"evt.button === 0 && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && !evt.altKey && !evt.currentTarget.hasAttribute('download') && (!evt.currentTarget.target || evt.currentTarget.target === '_self') && evt.currentTarget.origin === window.location.origin && (evt.preventDefault(), {url} === window.location.pathname + window.location.search || ({saveScroll}, {request}))"
 
     let restoreAction =
         "@get(window.location.pathname + window.location.search, {filterSignals: {include: /^$/}, headers: {'X-MeierMade-Navigation': 'restore'}})"
@@ -391,6 +394,7 @@ type Document =
             }
             body {
                 _dataInit Navigation.initialize
+                _dataOn ("scroll__window__throttle.100ms.trailing", Navigation.saveScroll)
                 _dataOn ("popstate__window", Navigation.restoreAction)
                 _dataSignals $"{{selectedNav: '{selectedNav}'}}"
                 _class "bg-gray-200 dark:bg-gray-950"

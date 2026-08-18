@@ -217,6 +217,7 @@ let tests =
                 Expect.stringContains html "id=\"page-content\" tabindex=\"-1\"" "Expected a stable, focusable patch root"
                 Expect.stringContains html "data-on:popstate__window=" "Expected browser history restoration"
                 Expect.stringContains html "window.history.scrollRestoration = &#39;manual&#39;" "Expected application-controlled history scroll restoration"
+                Expect.stringContains html "data-on:scroll__window__throttle.100ms.trailing=" "Expected throttled per-entry scroll persistence"
                 Expect.stringContains html "selectedNav: &#39;nav-home&#39;" "Expected encoded nav signal to render"
                 Expect.stringContains html "cookie-consent-banner" "Expected consent banner"
                 Expect.stringContains html "analytics-consent-title" "Expected consent dialog title"

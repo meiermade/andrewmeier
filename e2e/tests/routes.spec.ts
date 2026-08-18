@@ -99,8 +99,20 @@ test('internal navigation preserves history and restores entry scroll positions'
   await expect(page).toHaveURL('/articles')
   await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
+
+  await page.evaluate(() => window.scrollTo(0, 1200))
+  const articlesScrollY = await page.evaluate(() => window.scrollY)
+  expect(articlesScrollY).toBeGreaterThan(0)
+  await expect.poll(() => page.evaluate(() => history.state?.meierMadeScrollY), { timeout: 2000 }).toBe(articlesScrollY)
+
+  await page.goBack()
+  await expect(page).toHaveURL('/')
+  await page.goForward()
+  await expect(page).toHaveURL('/articles')
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(articlesScrollY)
+
   expect(await page.evaluate(() => (window as Window & { documentMarker?: string }).documentMarker)).toBe(documentMarker)
-  expect(datastarRequests).toEqual(['/articles', '/articles/personal-infrastructure', '/articles', '/', '/articles'])
+  expect(datastarRequests).toEqual(['/articles', '/articles/personal-infrastructure', '/articles', '/', '/articles', '/', '/articles'])
 })
 
 test('modified internal-link clicks retain native new-tab behavior', async ({ page, context }) => {
