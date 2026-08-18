@@ -7,7 +7,12 @@ open App.Articles.Shared
 open App.Common.View
 open type Html
 open type Datastar
-    
+
+let metadata : PageMetadata =
+    { canonicalPath = "/"
+      description = "Personal notes by Andy Meier about engineering, finance, and the systems behind them."
+      title = "Andy Meier" }
+
 let aboutMe =
     p {
         _class "mt-4 text-lg text-gray-600 dark:text-gray-400"
@@ -50,8 +55,9 @@ let homePage (recentArticles:Article list) =
                 div {
                     _class "mt-4"
                     a {
+                        _href "/articles"
                         _class "text-sm text-emerald-600 hover:underline hover:cursor-pointer dark:text-emerald-400"
-                        _dataOn ("click", "@get('/articles')")
+                        _dataOn ("click", Navigation.action "/articles")
                         "View all"
                     }
                 }

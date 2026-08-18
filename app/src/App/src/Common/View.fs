@@ -8,6 +8,11 @@ open System.Text.Json
 open type Html
 open type Datastar
 
+type PageMetadata =
+    { canonicalPath:string
+      description:string
+      title:string }
+
 module Asset =
     let resolveWithManifest (manifest:IReadOnlyDictionary<string, string>) (path:string) =
         match manifest.TryGetValue path with
@@ -29,6 +34,50 @@ module Asset =
 
     let fingerprinted (path:string) =
         resolveWithManifest manifest.Value path
+
+module Navigation =
+    let initialize = "window.history.scrollRestoration = 'manual'"
+
+    let saveScroll =
+        "window.history.replaceState(Object.assign({}, window.history.state || {}, {meierMadeScrollX: window.scrollX, meierMadeScrollY: window.scrollY}), '', window.location.href)"
+
+    let action (href:string) =
+        let url = JsonSerializer.Serialize href
+        let request = $"@get({url}, {{filterSignals: {{include: /^$/}}, headers: {{'X-MeierMade-Navigation': 'push'}}}})"
+        $"evt.button === 0 && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && !evt.altKey && !evt.currentTarget.hasAttribute('download') && (!evt.currentTarget.target || evt.currentTarget.target === '_self') && evt.currentTarget.origin === window.location.origin && (evt.preventDefault(), {url} === window.location.pathname + window.location.search || ({saveScroll}, {request}))"
+
+    let restoreAction =
+        "@get(window.location.pathname + window.location.search, {filterSignals: {include: /^$/}, headers: {'X-MeierMade-Navigation': 'restore'}})"
+
+module PageHead =
+    let canonicalUrl (metadata:PageMetadata) =
+        $"https://andymeier.dev{metadata.canonicalPath}"
+
+    let titleElement (metadata:PageMetadata) =
+        titleBuilder { _id "document-title"; metadata.title }
+
+    let descriptionElement (metadata:PageMetadata) =
+        meta { _id "meta-description"; _name "description"; _content metadata.description }
+
+    let openGraphTitleElement (metadata:PageMetadata) =
+        meta { _id "open-graph-title"; _property "og:title"; _content metadata.title }
+
+    let openGraphDescriptionElement (metadata:PageMetadata) =
+        meta { _id "open-graph-description"; _property "og:description"; _content metadata.description }
+
+    let openGraphUrlElement (metadata:PageMetadata) =
+        meta { _id "open-graph-url"; _property "og:url"; _content (canonicalUrl metadata) }
+
+    let canonicalElement (metadata:PageMetadata) =
+        link { _id "canonical-url"; _rel "canonical"; _href (canonicalUrl metadata) }
+
+    let patchableElements metadata =
+        [ titleElement metadata
+          descriptionElement metadata
+          openGraphTitleElement metadata
+          openGraphDescriptionElement metadata
+          openGraphUrlElement metadata
+          canonicalElement metadata ]
 
 module SafeOutput =
     let private imageSchemes = Set.ofList [ Uri.UriSchemeHttp; Uri.UriSchemeHttps ]
@@ -179,7 +228,7 @@ module Footer =
             div { _class "grow" }
             div {
                 _class "text-sm flex flex-col space-y-1"
-                a { _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", "@get('/articles')"); "Articles" }
+                a { _href "/articles"; _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", Navigation.action "/articles"); "Articles" }
                 a { _href "https://meiermade.com"; _class "whitespace-nowrap underline hover:text-emerald-600 dark:hover:text-emerald-400"; "Meier Made" }
                 button {
                     _id "analytics-settings"
@@ -200,12 +249,13 @@ module TopNav =
 
         a {
             _id id
+            _href href
             _class baseClass
             _dataClass ("text-emerald-600", $"$selectedNav == '{id}'")
             _dataClass ("dark:text-emerald-400", $"$selectedNav == '{id}'")
             _dataClass ("text-gray-800", $"$selectedNav != '{id}'")
             _dataClass ("dark:text-gray-200", $"$selectedNav != '{id}'")
-            _dataOn ("click", $"@get('{href}')")
+            _dataOn ("click", Navigation.action href)
             el
         }
 
@@ -219,7 +269,7 @@ module TopNav =
             _dataClass ("font-semibold", $"$selectedNav == '{id}'")
             _dataClass ("text-gray-700", $"$selectedNav != '{id}'")
             _dataClass ("dark:text-gray-300", $"$selectedNav != '{id}'")
-            _dataOn ("click__prevent", $"@get('{href}')")
+            _dataOn ("click", Navigation.action href)
             text label
         }
 
@@ -313,18 +363,24 @@ module TopNav =
 
 module Page =
     let primary (page:HtmlElement) =
-        div { _id "page"; _class "min-h-screen bg-gray-100 dark:bg-gray-900"; page }
+        div { _id "page-content"; _tabindex -1; _class "min-h-screen bg-gray-100 dark:bg-gray-900"; page }
 
 type Document =
-    static member primary (page:HtmlElement, otelEndpoint:string, ?selectedNav:string) =
+    static member primary (metadata:PageMetadata, page:HtmlElement, otelEndpoint:string, ?selectedNav:string) =
         let selectedNav = defaultArg selectedNav ""
 
         html {
             _lang "en"
             head {
-                title "Andy Meier"
+                PageHead.titleElement metadata
                 meta { _charset "UTF-8" }
                 meta { _name "viewport"; _content "width=device-width, initial-scale=1.0" }
+                PageHead.descriptionElement metadata
+                PageHead.openGraphTitleElement metadata
+                PageHead.openGraphDescriptionElement metadata
+                meta { _property "og:type"; _content "website" }
+                PageHead.openGraphUrlElement metadata
+                PageHead.canonicalElement metadata
                 script { js "let t=localStorage.getItem('theme');if(t==='dark'||(!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.classList.add('dark')}" }
                 script {
                     _id "browser-telemetry"
@@ -337,6 +393,9 @@ type Document =
                 script { _type "module"; _src (Asset.fingerprinted "/scripts/datastar.1.0.2.js") }
             }
             body {
+                _dataInit Navigation.initialize
+                _dataOn ("scroll__window__throttle.100ms.trailing", Navigation.saveScroll)
+                _dataOn ("popstate__window", Navigation.restoreAction)
                 _dataSignals $"{{selectedNav: '{selectedNav}'}}"
                 _class "bg-gray-200 dark:bg-gray-950"
                 div {
