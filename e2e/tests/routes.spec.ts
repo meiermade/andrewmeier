@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test'
 
-const isRemote = process.env.E2E_START_LOCAL === '0'
-const siteBaseUrl = process.env.SITE_E2E_BASE_URL ?? (isRemote ? 'https://andymeier.dev' : `http://127.0.0.1:${process.env.E2E_SERVER_PORT ?? '5051'}`)
+const isRemote = process.env.E2E_SCOPE === 'deployed'
+const siteBaseUrl = process.env.SITE_E2E_BASE_URL ?? (isRemote ? 'https://andymeier.dev' : 'http://127.0.0.1:5051')
 const otelEndpoint = isRemote ? 'https://otel.meiermade.com' : 'https://otel.test'
+const expectedAnalyticsMode = process.env.E2E_EXPECTED_ANALYTICS_MODE
+const isTelemetryScriptRequest = (url: string) => /^\/scripts\/telemetry(?:\.[a-f0-9]+)?\.js$/.test(new URL(url).pathname)
 const testImage = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64')
 
 test.beforeEach(async ({ page }) => {
@@ -18,6 +20,12 @@ test.beforeEach(async ({ page }) => {
     url: siteBaseUrl,
     sameSite: 'Lax',
   }])
+})
+
+test('recognizes local and fingerprinted telemetry script requests', () => {
+  expect(isTelemetryScriptRequest('https://andymeier.dev/scripts/telemetry.js')).toBe(true)
+  expect(isTelemetryScriptRequest('https://andymeier.dev/scripts/telemetry.033ef8688173.js')).toBe(true)
+  expect(isTelemetryScriptRequest('https://andymeier.dev/scripts/privacy.8683adb54986.js')).toBe(false)
 })
 
 test('homepage renders recent articles', async ({ page }) => {
@@ -107,8 +115,10 @@ test('internal navigation preserves history and restores entry scroll positions'
 
   await page.goBack()
   await expect(page).toHaveURL('/')
+  await expect(page.getByRole('heading', { name: 'Andy Meier', exact: true })).toBeVisible()
   await page.goForward()
   await expect(page).toHaveURL('/articles')
+  await expect(page.getByRole('heading', { name: 'Articles', exact: true })).toBeVisible()
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(articlesScrollY)
 
   expect(await page.evaluate(() => (window as Window & { documentMarker?: string }).documentMarker)).toBe(documentMarker)
@@ -374,6 +384,121 @@ test('navigation disclosures use native keyboard behavior without Tailwind Eleme
   await expect(navigationButton).toBeFocused()
 })
 
+test('privacy page explains current regional analytics controls', async ({ page }) => {
+  const response = await page.goto('/privacy', { waitUntil: 'domcontentloaded' })
+
+  expect(response?.status()).toBe(200)
+  await expect(page.getByRole('heading', { name: 'Privacy', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Browser analytics', exact: true })).toBeVisible()
+  await expect(page.getByText('In locations where consent is required', { exact: false })).toBeVisible()
+  await expect(page.getByText('Analytics settings control in the footer', { exact: false })).toBeVisible()
+  await expect(page.getByText('Google Ads', { exact: false })).toHaveCount(0)
+  await expect(page.getByText('LinkedIn Insight Tag', { exact: false })).toHaveCount(0)
+})
+
+test('policy check exposes only whether the trusted regional mode matches', async ({ request }) => {
+  test.skip(isRemote, 'Simulated country headers are trusted only by the local origin.')
+  const us = await request.get('/privacy/policy-check/default-on', { headers: { 'CF-IPCountry': 'US' } })
+  const strict = await request.get('/privacy/policy-check/opt-in', { headers: { 'CF-IPCountry': 'DE' } })
+  const mismatch = await request.get('/privacy/policy-check/opt-in', { headers: { 'CF-IPCountry': 'US' } })
+  const unsupported = await request.get('/privacy/policy-check/unsupported', { headers: { 'CF-IPCountry': 'US' } })
+
+  expect(us.status()).toBe(200)
+  expect(strict.status()).toBe(200)
+  expect(mismatch.status()).toBe(409)
+  expect(unsupported.status()).toBe(400)
+  expect(us.headers()['cache-control']).toBe('no-store')
+})
+
+test('starts limited analytics by default for US visitors without showing the banner', async ({ page }) => {
+  test.skip(isRemote, 'Simulated country headers are trusted only by the local origin.')
+  await page.context().clearCookies()
+  await page.setExtraHTTPHeaders({ 'CF-IPCountry': 'US' })
+  const otlpRequests: string[] = []
+  await page.route(`${otelEndpoint}/**`, async route => {
+    otlpRequests.push(route.request().url())
+    await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })
+  })
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  await expect(page.getByRole('dialog', { name: 'Analytics settings' })).toBeHidden()
+  await expect(page.locator('#privacy-controls')).toHaveAttribute('data-analytics-mode', 'default-on')
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).not.toBeNull()
+  await expect.poll(() => otlpRequests.length).toBeGreaterThan(0)
+  expect((await page.context().cookies()).find(cookie => cookie.name === 'analytics-consent')).toBeUndefined()
+})
+
+test('requires consent and defers telemetry for strict and unknown locations', async ({ page }) => {
+  test.skip(isRemote, 'Simulated country headers are trusted only by the local origin.')
+  for (const countryCode of ['DE', 'CA', 'XX', 'T1']) {
+    await page.context().clearCookies()
+    await page.setExtraHTTPHeaders({ 'CF-IPCountry': countryCode })
+    const telemetryRequests: string[] = []
+    page.on('request', request => {
+      if (isTelemetryScriptRequest(request.url())) telemetryRequests.push(request.url())
+    })
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    await expect(page.getByRole('dialog', { name: 'Optional analytics' })).toBeVisible()
+    await expect(page.locator('#privacy-controls')).toHaveAttribute('data-analytics-mode', 'opt-in')
+    expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
+    expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-traffic-attribution'))).toBeNull()
+    expect(telemetryRequests).toEqual([])
+  }
+})
+
+test('preserves an explicit decline in a default-on US region', async ({ page }) => {
+  test.skip(isRemote, 'Simulated country headers are trusted only by the local origin.')
+  await page.setExtraHTTPHeaders({ 'CF-IPCountry': 'US' })
+  const otlpRequests: string[] = []
+  await page.route(`${otelEndpoint}/**`, async route => {
+    otlpRequests.push(route.request().url())
+    await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })
+  })
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  await expect(page.getByRole('dialog', { name: 'Analytics settings' })).toBeHidden()
+  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
+  expect(otlpRequests).toEqual([])
+})
+
+test('deployed site enforces its Cloudflare-resolved regional policy', async ({ page }) => {
+  test.skip(!isRemote, 'Production policy verification runs only through public Cloudflare.')
+  if (expectedAnalyticsMode !== 'default-on' && expectedAnalyticsMode !== 'opt-in') {
+    throw new Error('E2E_EXPECTED_ANALYTICS_MODE must be default-on or opt-in for deployed policy verification.')
+  }
+  await page.context().clearCookies()
+  const otlpRequests: string[] = []
+  const telemetryScripts: string[] = []
+  page.on('request', request => {
+    if (isTelemetryScriptRequest(request.url())) telemetryScripts.push(request.url())
+  })
+  await page.route(`${otelEndpoint}/**`, async route => {
+    otlpRequests.push(route.request().url())
+    await route.fulfill({ status: 200, contentType: 'application/x-protobuf', body: Buffer.alloc(0) })
+  })
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+  const mode = await page.locator('#privacy-controls').getAttribute('data-analytics-mode')
+  expect(mode).toBe(expectedAnalyticsMode)
+  if (expectedAnalyticsMode === 'default-on') {
+    await expect(page.getByRole('dialog', { name: 'Analytics settings' })).toBeHidden()
+    await expect.poll(() => telemetryScripts.length).toBeGreaterThan(0)
+    await expect.poll(() => page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).not.toBeNull()
+    await expect.poll(() => otlpRequests.length).toBeGreaterThan(0)
+  } else {
+    await expect(page.getByRole('dialog', { name: 'Optional analytics' })).toBeVisible()
+    expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
+    expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-traffic-attribution'))).toBeNull()
+    expect(telemetryScripts).toEqual([])
+    expect(otlpRequests).toEqual([])
+  }
+})
+
 test('consent endpoint honors the trusted forwarded scheme', async ({ request }) => {
   const origin = new URL(siteBaseUrl)
   origin.protocol = 'https:'
@@ -391,7 +516,9 @@ test('consent endpoint honors the trusted forwarded scheme', async ({ request })
 })
 
 test('ignores a legacy local analytics choice and asks again', async ({ page }) => {
+  test.skip(isRemote, 'The fallback policy requires a controlled local country header.')
   await page.context().clearCookies()
+  await page.setExtraHTTPHeaders({ 'CF-IPCountry': 'DE' })
   await page.addInitScript(() => localStorage.setItem('analytics-consent', 'accepted'))
   const consentRequests: string[] = []
   const otlpRequests: string[] = []
@@ -413,6 +540,8 @@ test('ignores a legacy local analytics choice and asks again', async ({ page }) 
 })
 
 test('invalid consent cookies fail closed and keep the controls usable', async ({ page }) => {
+  test.skip(isRemote, 'The fallback policy requires a controlled local country header.')
+  await page.setExtraHTTPHeaders({ 'CF-IPCountry': 'DE' })
   for (const value of ['%', 'v1.accepted.2025-01-01.0']) {
     await page.context().clearCookies()
     await page.context().addCookies([{ name: 'analytics-consent', value, url: siteBaseUrl, sameSite: 'Lax' }])
@@ -428,17 +557,25 @@ test('invalid consent cookies fail closed and keep the controls usable', async (
 })
 
 test('analytics choices keep mobile visual and keyboard order aligned', async ({ page }) => {
+  test.skip(isRemote, 'The fallback policy requires a controlled local country header.')
   await page.context().clearCookies()
+  await page.setExtraHTTPHeaders({ 'CF-IPCountry': 'DE' })
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
 
-  const decline = page.getByRole('button', { name: 'Decline' })
+  const decline = page.getByRole('button', { name: 'Decline analytics' })
   const accept = page.getByRole('button', { name: 'Accept analytics' })
   const declineBox = await decline.boundingBox()
   const acceptBox = await accept.boundingBox()
   expect(declineBox?.y).toBeLessThan(acceptBox?.y ?? 0)
+  expect(await decline.getAttribute('class')).toBe(await accept.getAttribute('class'))
 
-  await page.getByRole('button', { name: 'Analytics settings' }).focus()
+  const settings = page.getByRole('button', { name: 'Analytics settings' })
+  await settings.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('heading', { name: 'Optional analytics' })).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('link', { name: 'privacy page' })).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(decline).toBeFocused()
   await page.keyboard.press('Tab')
@@ -446,14 +583,19 @@ test('analytics choices keep mobile visual and keyboard order aligned', async ({
 })
 
 test('browser telemetry starts only after analytics consent', async ({ page }) => {
-  const googleAnalyticsRequests: string[] = []
+  const advertisingRequests: string[] = []
+  const telemetryScripts: string[] = []
   const otlpRequests: string[] = []
   const otlpBodies: Buffer[] = []
   page.on('request', request => {
     const hostname = new URL(request.url()).hostname
-    if (hostname === 'www.googletagmanager.com' || hostname === 'google-analytics.com' || hostname.endsWith('.google-analytics.com')) {
-      googleAnalyticsRequests.push(request.url())
-    }
+    if (isTelemetryScriptRequest(request.url())) telemetryScripts.push(request.url())
+    if (
+      hostname === 'www.googletagmanager.com'
+      || hostname === 'google-analytics.com'
+      || hostname.endsWith('.google-analytics.com')
+      || hostname === 'snap.licdn.com'
+    ) advertisingRequests.push(request.url())
   })
   await page.route(`${otelEndpoint}/**`, async route => {
     otlpRequests.push(route.request().url())
@@ -463,6 +605,7 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
   })
   await page.goto('/?utm_source=linkedin&utm_medium=organic-social&utm_campaign=personal-infrastructure&utm_content=post-01&email=private%40example.com', { waitUntil: 'domcontentloaded' })
   expect(otlpRequests).toEqual([])
+  expect(telemetryScripts).toEqual([])
   expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
   expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-traffic-attribution'))).toBeNull()
 
@@ -484,6 +627,7 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
   ).toMatch(/^v1[.]accepted[.]2026-08-16[.]\d+$/)
   expect(await page.evaluate(() => localStorage.getItem('analytics-consent'))).toBeNull()
 
+  await expect.poll(() => telemetryScripts.length).toBeGreaterThan(0)
   await expect.poll(() => otlpRequests.length).toBeGreaterThan(0)
   await expect.poll(() =>
     otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_opened'))),
@@ -500,7 +644,7 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
     otlpBodies.some(body => body.includes(Buffer.from('com.meiermade.content.article_completed'))),
   ).toBe(true)
   expect(otlpRequests.every(url => url === `${otelEndpoint}/v1/logs` || url === `${otelEndpoint}/v1/traces`)).toBe(true)
-  expect(googleAnalyticsRequests).toEqual([])
+  expect(advertisingRequests).toEqual([])
   const firstSessionId = await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))
   expect(firstSessionId).not.toBeNull()
 
@@ -524,12 +668,24 @@ test('browser telemetry starts only after analytics consent', async ({ page }) =
   const declineResponse = page.waitForResponse(response =>
     response.url().endsWith('/privacy/consent') && response.request().method() === 'POST',
   )
-  await page.getByRole('button', { name: 'Decline' }).click()
+  await page.getByRole('button', { name: 'Decline analytics' }).click()
   expect((await declineResponse).status()).toBe(204)
   await expect.poll(async () =>
     (await page.context().cookies()).find(cookie => cookie.name === 'analytics-consent')?.value,
   ).toMatch(/^v1[.]declined[.]2026-08-16[.]\d+$/)
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
+
+  otlpRequests.length = 0
+  otlpBodies.length = 0
+  await page.getByRole('link', { name: 'Articles', exact: true }).last().click()
+  await expect(page).toHaveURL('/articles')
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(1500)
+
+  expect(otlpRequests).toEqual([])
+  expect(otlpBodies).toEqual([])
+  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-session-id'))).toBeNull()
+  expect(await page.evaluate(() => sessionStorage.getItem('opentelemetry-traffic-attribution'))).toBeNull()
 })
 
 test('legacy company paths permanently redirect to Meier Made', async ({ request }) => {

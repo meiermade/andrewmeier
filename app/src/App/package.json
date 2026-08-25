@@ -5,7 +5,7 @@
   "scripts": {
     "build": "npm run build:prism && npm run build:telemetry",
     "build:prism": "esbuild Client/prism.ts --bundle --format=iife --minify --outfile=wwwroot/scripts/prism.js",
-    "build:telemetry": "esbuild Client/telemetry.ts --bundle --format=esm --minify --outfile=wwwroot/scripts/telemetry.js",
+    "build:telemetry": "esbuild Client/privacy.ts Client/telemetry.ts --bundle --format=esm --minify --outdir=wwwroot/scripts",
     "check": "tsc --noEmit",
     "test": "vitest run"
   },

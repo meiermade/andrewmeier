@@ -18,26 +18,22 @@ jobs:
         uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.x
-      - name: Restore Tools & Dependencies
-        working-directory: ./app
-        run: |
-          dotnet tool restore
-          dotnet paket restore
-      - name: Run Tests
-        working-directory: ./app
-        run: dotnet run --project src/Tests/Tests.fsproj
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
           node-version: 24.x
           cache: npm
-          cache-dependency-path: e2e/package-lock.json
-      - name: Install E2E packages
-        working-directory: ./e2e
-        run: npm ci
-      - name: Install Firefox
-        working-directory: ./e2e
-        run: npx playwright install --with-deps firefox
+          cache-dependency-path: |
+            app/src/App/package-lock.json
+            e2e/package-lock.json
+      - name: Restore tools and dependencies
+        working-directory: ./app
+        run: |
+          dotnet tool restore
+          dotnet paket restore
+      - name: Run tests
+        working-directory: ./app
+        run: ./fake.sh Test --single-target
       - name: Install Tailwind CSS
         run: |
           curl --fail --location --silent --show-error \
@@ -46,8 +42,8 @@ jobs:
           echo 'dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a  /tmp/tailwindcss' | sha256sum --check
           sudo install /tmp/tailwindcss /usr/local/bin/tailwindcss
       - name: Run local E2E
-        working-directory: ./e2e
-        run: npx playwright test --project=firefox
+        working-directory: ./app
+        run: ./fake.sh TestE2E
       - name: Upload E2E diagnostics
         if: failure()
         uses: actions/upload-artifact@v7

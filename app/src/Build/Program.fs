@@ -19,14 +19,17 @@ Environment.GetCommandLineArgs()
 
 let srcDir = Path.getDirectory __SOURCE_DIRECTORY__
 let rootDir = Path.getDirectory srcDir
+let repoDir = Path.getDirectory rootDir
 let appDir = srcDir </> "App"
+let e2eDir = repoDir </> "e2e"
+let pulumiDir = repoDir </> "pulumi"
 let outDir = appDir </> "out"
 let wwwrootDir = outDir </> "wwwroot"
 let hashedAssetExtensions =
     set [ ".css"; ".gif"; ".ico"; ".jpeg"; ".jpg"; ".js"; ".png"; ".svg"; ".webp"; ".woff"; ".woff2" ]
 
-let toWebPath (rootDir:string) (filePath:string) =
-    let relativePath = Path.GetRelativePath(rootDir, filePath).Replace(Path.DirectorySeparatorChar, '/')
+let toWebPath (root:string) (filePath:string) =
+    let relativePath = Path.GetRelativePath(root, filePath).Replace(Path.DirectorySeparatorChar, '/')
     "/" + relativePath
 
 let fingerprintedFilePath (filePath:string) (hash:string) =
@@ -42,9 +45,9 @@ let hashFileContents (filePath:string) =
     |> Convert.ToHexString
     |> fun hash -> hash.ToLowerInvariant().Substring(0, 12)
 
-let fingerprintAssets (rootDir:string) =
+let fingerprintAssets (root:string) =
     let files =
-        Directory.EnumerateFiles(rootDir, "*", SearchOption.AllDirectories)
+        Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
         |> Seq.filter (fun path -> hashedAssetExtensions.Contains(Path.GetExtension(path).ToLowerInvariant()))
         |> Seq.sort
         |> Seq.toList
@@ -55,12 +58,11 @@ let fingerprintAssets (rootDir:string) =
             let hash = hashFileContents path
             let fingerprintedPath = fingerprintedFilePath path hash
             File.Copy(path, fingerprintedPath, true)
-            toWebPath rootDir path, toWebPath rootDir fingerprintedPath)
+            toWebPath root path, toWebPath root fingerprintedPath)
         |> Map.ofSeq
 
-    let manifestPath = Path.Combine(rootDir, "asset-manifest.json")
-    let json = JsonSerializer.Serialize(manifest)
-    File.WriteAllText(manifestPath, json)
+    let manifestPath = Path.Combine(root, "asset-manifest.json")
+    File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest))
 
 let inline (==>!) x y = x ==> y |> ignore
 
@@ -76,19 +78,32 @@ let exec command workDir args =
     |> CreateProcess.withWorkingDirectory workDir
     |> CreateProcess.ensureExitCode
     |> Proc.start
-    
+
 let availableLocalPort () =
     use listener = new TcpListener(IPAddress.Loopback, 0)
     listener.Start()
     (listener.LocalEndpoint :?> IPEndPoint).Port
 
+let environmentValue name fallback =
+    Environment.GetEnvironmentVariable name
+    |> Option.ofObj
+    |> Option.filter (String.IsNullOrWhiteSpace >> not)
+    |> Option.defaultValue fallback
+
+let playwrightImage () =
+    let image = File.ReadAllText(e2eDir </> "playwright-image.txt").Trim()
+    let packageJson = File.ReadAllText(e2eDir </> "package.json")
+    let packageVersion = BrowserE2E.playwrightPackageVersion packageJson
+    BrowserE2E.verifyPlaywrightImage packageVersion image
+    image
+
 Target.create "StartDeps" <| fun _ ->
     Trace.trace "Starting dependencies (seq)"
-    exec "docker-compose" rootDir ["up"; "-d"; "seq"] |> Task.WaitAll
+    exec "docker-compose" rootDir [ "up"; "-d"; "seq" ] |> Task.WaitAll
 
 Target.create "EnsureDevCert" <| fun _ ->
     Trace.trace "Ensuring trusted ASP.NET Core HTTPS development certificate"
-    exec "dotnet" rootDir ["dev-certs"; "https"; "--trust"] |> Task.WaitAll
+    exec "dotnet" rootDir [ "dev-certs"; "https"; "--trust" ] |> Task.WaitAll
 
 Target.create "Watch" <| fun _ ->
     let serverUrl = $"https://localhost:{availableLocalPort ()}"
@@ -101,46 +116,63 @@ Target.create "Watch" <| fun _ ->
         ]
         |> EnvMap.ofMap
 
-    exec "npm" appDir ["ci"; "--ignore-scripts"] |> _.Wait()
-    let watchPrism = exec "npm" appDir ["run"; "build:prism"; "--"; "--watch"]
-    let watchTelemetry = exec "npm" appDir ["run"; "build:telemetry"; "--"; "--watch"]
-    let watchCss = exec "tailwindcss" appDir ["--input"; "./input.css"; "--output"; "./wwwroot/css/compiled.css"; "--watch"]
-    let watchServer = execEnv "dotnet" appDir env ["watch"; "run"; "--no-restore"]
+    exec "npm" appDir [ "ci"; "--ignore-scripts" ] |> _.Wait()
+    let watchPrism = exec "npm" appDir [ "run"; "build:prism"; "--"; "--watch" ]
+    let watchTelemetry = exec "npm" appDir [ "run"; "build:telemetry"; "--"; "--watch" ]
+    let watchCss = exec "tailwindcss" appDir [ "--input"; "./input.css"; "--output"; "./wwwroot/css/compiled.css"; "--watch" ]
+    let watchServer = execEnv "dotnet" appDir env [ "watch"; "run"; "--no-restore" ]
     Task.WaitAny(watchPrism, watchTelemetry, watchCss, watchServer) |> ignore
 
 Target.create "BuildCss" <| fun _ ->
-    let buildCss = exec "tailwindcss" appDir ["--input"; "./input.css"; "--output"; "./wwwroot/css/compiled.css"; "--minify"]
-    buildCss.Wait()
+    exec "tailwindcss" appDir [ "--input"; "./input.css"; "--output"; "./wwwroot/css/compiled.css"; "--minify" ]
+    |> _.Wait()
 
 Target.create "BuildBrowser" <| fun _ ->
     if not (Environment.GetEnvironmentVariable("SKIP_BROWSER_BUILD") = "true") then
-        exec "npm" appDir ["ci"; "--ignore-scripts"] |> _.Wait()
-        exec "npm" appDir ["run"; "check"] |> _.Wait()
-        exec "npm" appDir ["run"; "build"] |> _.Wait()
+        exec "npm" appDir [ "ci"; "--ignore-scripts" ] |> _.Wait()
+        exec "npm" appDir [ "run"; "check" ] |> _.Wait()
+        exec "npm" appDir [ "run"; "build" ] |> _.Wait()
 
 Target.create "Test" <| fun _ ->
-    exec "npm" appDir ["ci"; "--ignore-scripts"] |> _.Wait()
-    exec "npm" appDir ["run"; "check"] |> _.Wait()
-    exec "npm" appDir ["test"] |> _.Wait()
-    let tests = exec "dotnet" rootDir ["run"; "--project"; "src/Tests/Tests.fsproj"]
-    tests.Wait()
+    exec "npm" appDir [ "ci"; "--ignore-scripts" ] |> _.Wait()
+    exec "npm" appDir [ "run"; "check" ] |> _.Wait()
+    exec "npm" appDir [ "test" ] |> _.Wait()
+    exec "dotnet" rootDir [ "run"; "--project"; "src/Build.Tests/Build.Tests.fsproj" ] |> _.Wait()
+    exec "dotnet" rootDir [ "run"; "--project"; "src/Tests/Tests.fsproj" ] |> _.Wait()
+
+Target.create "TestE2E" <| fun _ ->
+    let baseUrl = $"http://127.0.0.1:{availableLocalPort ()}"
+    let stateDirectory =
+        environmentValue "RUNNER_TEMP" (Path.GetTempPath())
+        </> "andymeier-e2e"
+    BrowserE2E.runLocal Trace.trace repoDir e2eDir (playwrightImage ()) baseUrl stateDirectory
+
+Target.create "VerifyPublishedAnalytics" <| fun _ ->
+    BrowserE2E.runPublished
+        Trace.trace
+        e2eDir
+        pulumiDir
+        (environmentValue "PULUMI_STACK" "meiermade/andymeier/prod")
+        (playwrightImage ())
+        (environmentValue "SITE_E2E_BASE_URL" "https://andymeier.dev")
 
 Target.create "Publish" <| fun _ ->
     Shell.cleanDir outDir
-    let publish = exec "dotnet" appDir [
+    exec "dotnet" appDir [
         "publish"
         "--output"; "./out"
         "--self-contained"; "false"
     ]
-    publish.Wait()
+    |> _.Wait()
     fingerprintAssets wwwrootDir
 
 Target.create "Default" (fun _ -> Target.listAvailable())
 
 "StartDeps" ==>! "EnsureDevCert"
 "EnsureDevCert" ==>! "Watch"
-
 "BuildBrowser" ==>! "Publish"
 "BuildCss" ==>! "Publish"
+"BuildBrowser" ==>! "TestE2E"
+"BuildCss" ==>! "TestE2E"
 
 Target.runOrDefaultWithArguments "Default"

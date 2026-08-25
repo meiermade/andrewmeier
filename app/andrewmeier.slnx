@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/App/App.fsproj" />
     <Project Path="src/Build/Build.fsproj" />
+    <Project Path="src/Build.Tests/Build.Tests.fsproj" />
     <Project Path="src/Tests/Tests.fsproj" />
   </Folder>
 </Solution>

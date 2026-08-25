@@ -208,7 +208,8 @@ let tests =
                     { canonicalPath = "/"
                       description = "Personal notes by Andy Meier."
                       title = "Andy Meier" }
-                let doc = Document.primary(metadata, Page.primary (div { "Hello" }), "https://otel.meiermade.com", "nav-home")
+                let privacyPolicy = App.Privacy.resolve (Some "DE")
+                let doc = Document.primary(metadata, Page.primary (div { "Hello" }), "https://otel.meiermade.com", privacyPolicy, "nav-home")
 
                 let html = Render.toHtmlDocString doc
 
@@ -221,18 +222,22 @@ let tests =
                 Expect.stringContains html "selectedNav: &#39;nav-home&#39;" "Expected encoded nav signal to render"
                 Expect.stringContains html "cookie-consent-banner" "Expected consent banner"
                 Expect.stringContains html "analytics-consent-title" "Expected consent dialog title"
-                Expect.stringContains html "Optional analytics" "Expected Meier Made-style consent heading"
+                Expect.stringContains html "Optional analytics" "Expected strict-region consent heading"
                 Expect.stringContains html "rounded-2xl" "Expected compact consent card"
-                Expect.stringContains html "Decline" "Expected decline action"
-                Expect.stringContains html "Accept analytics" "Expected accept action"
+                Expect.stringContains html "Decline analytics" "Expected symmetrical decline action"
+                Expect.stringContains html "Accept analytics" "Expected symmetrical accept action"
                 Expect.stringContains html "Optional browser analytics starts only if you accept." "Expected accurate first-party analytics disclosure"
+                Expect.stringContains html "href=\"/privacy#analytics\"" "Expected detailed privacy disclosure"
                 Expect.stringContains html "Analytics settings" "Expected a persistent withdrawal control"
+                Expect.stringContains html "aria-controls=\"cookie-consent-banner\"" "Expected settings relationship"
                 Expect.isFalse (html.Contains "fetch('/privacy/consent'") "Expected no embedded consent implementation"
                 Expect.isFalse (html.Contains "window.applyAnalyticsConsent") "Expected consent behavior in the typed client bundle"
                 Expect.isFalse (html.Contains "googletagmanager.com") "Expected no Google tag loader"
                 Expect.isFalse (html.Contains "gtag(") "Expected no Google Analytics calls"
-                Expect.stringContains html "id=\"browser-telemetry\"" "Expected the locally bundled browser telemetry module"
-                Expect.stringContains html "src=\"/scripts/telemetry.js\"" "Expected the browser telemetry asset"
+                Expect.stringContains html "id=\"privacy-controls\"" "Expected the lightweight privacy module"
+                Expect.stringContains html "src=\"/scripts/privacy.js\"" "Expected the privacy controller asset"
+                Expect.stringContains html "data-analytics-mode=\"opt-in\"" "Expected the server-owned regional policy"
+                Expect.stringContains html "data-telemetry-src=\"/scripts/telemetry.js\"" "Expected deferred telemetry asset metadata"
                 Expect.stringContains html "data-otel-endpoint=\"https://otel.meiermade.com\"" "Expected the public OTLP endpoint"
                 Expect.isFalse (html.Contains "window.loadOpenTelemetry") "Expected no global telemetry lifecycle API"
                 Expect.isFalse (html.Contains "snowplow") "Expected Snowplow to be removed"

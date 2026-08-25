@@ -229,10 +229,13 @@ module Footer =
             div {
                 _class "text-sm flex flex-col space-y-1"
                 a { _href "/articles"; _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", Navigation.action "/articles"); "Articles" }
+                a { _href "/privacy"; _class "underline cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400"; _dataOn ("click", Navigation.action "/privacy"); "Privacy" }
                 a { _href "https://meiermade.com"; _class "whitespace-nowrap underline hover:text-emerald-600 dark:hover:text-emerald-400"; "Meier Made" }
                 button {
                     _id "analytics-settings"
                     _type "button"
+                    _ariaControls "cookie-consent-banner"
+                    _ariaExpanded "false"
                     _class "text-left underline hover:text-emerald-600 dark:hover:text-emerald-400"
                     "Analytics settings"
                 }
@@ -365,8 +368,68 @@ module Page =
     let primary (page:HtmlElement) =
         div { _id "page-content"; _tabindex -1; _class "min-h-screen bg-gray-100 dark:bg-gray-900"; page }
 
+module Analytics =
+    let banner (policy:App.Privacy.BrowserPolicy) =
+        let title, description =
+            match policy.analytics with
+            | App.Privacy.AnalyticsMode.OptIn ->
+                "Optional analytics",
+                "Optional browser analytics starts only if you accept."
+            | App.Privacy.AnalyticsMode.DefaultOn ->
+                "Analytics settings",
+                "Limited first-party analytics may run by default in your region."
+
+        div {
+            _id "cookie-consent-banner"
+            _role "dialog"
+            _ariaLabelledby "analytics-consent-title"
+            _ariaDescribedby "analytics-consent-description"
+            _class "pointer-events-none fixed inset-x-0 bottom-0 z-50 hidden px-4 pb-4 sm:px-6 sm:pb-6"
+            div {
+                _class "pointer-events-auto ml-auto max-w-xl rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl shadow-gray-950/15 sm:p-6 dark:border-gray-700 dark:bg-gray-900 dark:shadow-black/30"
+                h2 {
+                    _id "analytics-consent-title"
+                    _tabindex -1
+                    _class "text-base font-semibold text-gray-950 outline-none dark:text-gray-50"
+                    title
+                }
+                p {
+                    _id "analytics-consent-description"
+                    _class "mt-2 text-sm/6 text-gray-600 dark:text-gray-300"
+                    description
+                    " It helps me understand traffic sources, site usage, performance, and errors; declining does not affect the site. A first-party cookie remembers an explicit choice for six months. Read the "
+                    a {
+                        _href "/privacy#analytics"
+                        _class "font-semibold text-emerald-700 underline decoration-emerald-700/30 underline-offset-2 hover:decoration-emerald-700 dark:text-emerald-400 dark:decoration-emerald-400/30 dark:hover:decoration-emerald-400"
+                        "privacy page"
+                    }
+                    "."
+                }
+                p {
+                    _id "analytics-consent-error"
+                    _ariaLive "polite"
+                    _class "mt-3 hidden text-sm/6 font-medium text-red-700 dark:text-red-300"
+                }
+                div {
+                    _class "mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end"
+                    button {
+                        _id "analytics-reject"
+                        _type "button"
+                        _class "rounded-full border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-gray-500 dark:hover:bg-gray-800 dark:focus-visible:outline-emerald-400"
+                        "Decline analytics"
+                    }
+                    button {
+                        _id "analytics-accept"
+                        _type "button"
+                        _class "rounded-full border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:border-gray-400 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:border-gray-500 dark:hover:bg-gray-800 dark:focus-visible:outline-emerald-400"
+                        "Accept analytics"
+                    }
+                }
+            }
+        }
+
 type Document =
-    static member primary (metadata:PageMetadata, page:HtmlElement, otelEndpoint:string, ?selectedNav:string) =
+    static member primary (metadata:PageMetadata, page:HtmlElement, otelEndpoint:string, privacyPolicy:App.Privacy.BrowserPolicy, ?selectedNav:string) =
         let selectedNav = defaultArg selectedNav ""
 
         html {
@@ -383,10 +446,12 @@ type Document =
                 PageHead.canonicalElement metadata
                 script { js "let t=localStorage.getItem('theme');if(t==='dark'||(!t||t==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches){document.documentElement.classList.add('dark')}" }
                 script {
-                    _id "browser-telemetry"
+                    _id "privacy-controls"
                     _type "module"
-                    _src (Asset.fingerprinted "/scripts/telemetry.js")
+                    _src (Asset.fingerprinted "/scripts/privacy.js")
+                    _data ("analytics-mode", App.Privacy.analyticsModeValue privacyPolicy)
                     _data ("otel-endpoint", otelEndpoint)
+                    _data ("telemetry-src", Asset.fingerprinted "/scripts/telemetry.js")
                 }
                 link { _href (Asset.fingerprinted "/css/compiled.css"); _rel "stylesheet" }
                 link { _href (Asset.fingerprinted "/css/prism.css"); _rel "stylesheet" }
@@ -404,47 +469,7 @@ type Document =
                     page
                     Footer.primary
                 }
-                div {
-                    _id "cookie-consent-banner"
-                    _role "dialog"
-                    _ariaLabelledby "analytics-consent-title"
-                    _ariaDescribedby "analytics-consent-description"
-                    _ariaLive "polite"
-                    _class "pointer-events-none fixed inset-x-0 bottom-0 z-50 hidden px-4 pb-4 sm:px-6 sm:pb-6"
-                    div {
-                        _class "pointer-events-auto ml-auto max-w-xl rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl shadow-gray-950/15 sm:p-6 dark:border-gray-700 dark:bg-gray-900 dark:shadow-black/30"
-                        h2 {
-                            _id "analytics-consent-title"
-                            _class "text-base font-semibold text-gray-950 dark:text-gray-50"
-                            "Optional analytics"
-                        }
-                        p {
-                            _id "analytics-consent-description"
-                            _class "mt-2 text-sm/6 text-gray-600 dark:text-gray-300"
-                            "Optional browser analytics starts only if you accept. It helps me understand traffic sources, site usage, performance, and errors; declining does not affect the site. A first-party cookie remembers your choice for six months."
-                        }
-                        p {
-                            _id "analytics-consent-error"
-                            _ariaLive "polite"
-                            _class "mt-3 hidden text-sm/6 font-medium text-red-700 dark:text-red-300"
-                        }
-                        div {
-                            _class "mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end"
-                            button {
-                                _id "analytics-reject"
-                                _type "button"
-                                _class "rounded-full border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:border-gray-600 dark:text-gray-100 dark:hover:bg-gray-800"
-                                "Decline"
-                            }
-                            button {
-                                _id "analytics-accept"
-                                _type "button"
-                                _class "rounded-full bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:hover:bg-emerald-400"
-                                "Accept analytics"
-                            }
-                        }
-                    }
-                }
+                Analytics.banner privacyPolicy
                 script { js "function getInitialTheme(){return localStorage.getItem('theme')||'system'};function applyTheme(t){var d=document.documentElement,isDark=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);d.classList.toggle('dark',isDark)};function setTheme(t){localStorage.setItem('theme',t);applyTheme(t);void window.renderMermaid?.(document)}" }
             }
         }
