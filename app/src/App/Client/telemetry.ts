@@ -10,15 +10,10 @@ import { FetchInstrumentation } from '@opentelemetry/instrumentation-fetch';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs';
 import { BatchSpanProcessor, WebTracerProvider } from '@opentelemetry/sdk-trace-web';
-import { initializeConsent } from './consent';
-import { consentChoice, pathAttributes, sanitizedUrl, trafficAttributes } from './event-contract';
+import { pathAttributes, sanitizedUrl } from './event-contract';
 
 const sessionKey = 'opentelemetry-session-id';
 const attributionKey = 'opentelemetry-traffic-attribution';
-const analyticsConsentWasPreviouslyGranted = consentChoice(document.cookie) === 'accepted';
-const initialAttribution = trafficAttributes(window.location.href, document.referrer);
-const script = document.getElementById('browser-telemetry') as HTMLScriptElement | null;
-const endpoint = script?.dataset.otelEndpoint?.replace(/\/$/, '');
 const completedArticles = new Set<string>();
 
 let loggerProvider: LoggerProvider | undefined;
@@ -28,6 +23,7 @@ let logger: ReturnType<typeof logs.getLogger> | undefined;
 let initialization: Promise<void> | undefined;
 let clickHandler: ((event: MouseEvent) => void) | undefined;
 let lastTrackedPath: string | undefined;
+let initialAttribution: Attributes = {};
 let sessionAttribution: Attributes | undefined;
 
 function sessionId(): string {
@@ -153,10 +149,16 @@ function flushWhenHidden(): void {
   ]);
 }
 
-async function initialize(): Promise<void> {
-  if (!endpoint || loggerProvider || consentChoice(document.cookie) !== 'accepted') return;
+export async function enableTelemetry(options: {
+  endpoint: string;
+  includeWebVitals: boolean;
+  initialAttribution: Attributes;
+}): Promise<void> {
+  if (loggerProvider) return;
   if (initialization) return initialization;
 
+  const endpoint = options.endpoint.replace(/\/$/, '');
+  initialAttribution = options.initialAttribution;
   initialization = (async () => {
     const resource = resourceFromAttributes({
       'service.name': 'andymeier-browser',
@@ -199,7 +201,7 @@ async function initialize(): Promise<void> {
           sanitizeUrl: sanitizedUrl,
           applyCustomLogRecordData: addCommonEventData,
         }),
-        ...(analyticsConsentWasPreviouslyGranted
+        ...(options.includeWebVitals
           ? [new WebVitalsInstrumentation({
               includeRawAttribution: false,
               applyCustomLogRecordData: addCommonEventData,
@@ -260,7 +262,7 @@ async function stop(): Promise<void> {
   context.disable();
 }
 
-async function disable(): Promise<void> {
+export async function disableTelemetry(): Promise<void> {
   await stop();
   sessionAttribution = undefined;
   sessionStorage.removeItem(sessionKey);
@@ -277,7 +279,6 @@ declare global {
 }
 
 window.meiermadeTelemetry = { emit, trackPage };
-initializeConsent({ enable: initialize, disable });
 window.addEventListener('pagehide', (event) => {
   if (!event.persisted) void stop();
 });
